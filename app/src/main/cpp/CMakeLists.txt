@@ -133,20 +133,34 @@ endif()
 # and arm64emu_main (the one symbol its source marks visible) is the whole
 # interface. libterm.so links it for that symbol; Gradle packages both.
 #
-# Sources are globbed rather than parsed out of the submodule's Makefile the way
-# arm64chroot's are: that Makefile builds with $(wildcard), so there is no SRCS
-# list to read and a glob is what it compiles.
+# Sources are globbed the way the submodule's Makefile globs them (it uses
+# $(wildcard), so there is no SRCS list to parse). The submodule is now a
+# monorepo (arm64chroot, arm64emu and chroot-ng under src/, their shared AArch64
+# core under lib/arm64); arm64emu is src/arm64emu plus lib/arm64, mirroring the
+# Makefile's ARM64EMU_SRC. The other two trees are not compiled from here: the
+# app still takes them from their own submodules.
 
 set(A64EMU_DIR ${NATIVE_DIR}/arm64emu)
-file(GLOB_RECURSE _emu_srcs CONFIGURE_DEPENDS ${A64EMU_DIR}/src/*.c)
+file(GLOB _emu_srcs CONFIGURE_DEPENDS
+    ${A64EMU_DIR}/src/arm64emu/*.c
+    ${A64EMU_DIR}/src/arm64emu/devices/*.c
+    ${A64EMU_DIR}/src/arm64emu/fdt/*.c
+    ${A64EMU_DIR}/src/arm64emu/net/*.c
+    ${A64EMU_DIR}/src/arm64emu/jit/*.c
+    ${A64EMU_DIR}/lib/arm64/*.c
+    ${A64EMU_DIR}/lib/arm64/jit/*.c)
 if(NOT _emu_srcs)
-    message(FATAL_ERROR "arm64emu: no sources under ${A64EMU_DIR}/src")
+    message(FATAL_ERROR "arm64emu: no sources under ${A64EMU_DIR}/src/arm64emu")
 endif()
+file(STRINGS ${A64EMU_DIR}/VERSION _emu_version LIMIT_COUNT 1)
 
 add_library(arm64emu SHARED ${_emu_srcs})
-target_include_directories(arm64emu PRIVATE ${A64EMU_DIR}/src)
+target_include_directories(arm64emu PRIVATE
+    ${A64EMU_DIR}/src/arm64emu ${A64EMU_DIR}/src/arm64emu/jit
+    ${A64EMU_DIR}/lib/arm64 ${A64EMU_DIR}/lib/arm64/jit)
 target_compile_definitions(arm64emu PRIVATE
-    ANDROID_JNI _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)
+    ANDROID_JNI _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE
+    PROJECT_VERSION="${_emu_version}")
 # -w: vendored third-party code compiles clear of libterm.so's -Wall -Werror.
 # -fno-math-errno lets the FP paths inline to hardware ops, as its own build does.
 target_compile_options(arm64emu PRIVATE -O2 -std=c11 -fno-math-errno -w)
