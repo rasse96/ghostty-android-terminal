@@ -8,7 +8,7 @@ already exists in the prebuilt library.
 
 ## Correctness / likely bugs
 
-- [ ] **Flush write-pty bytes emitted during resize.** `ghostty_terminal_resize`
+- [x] **Flush write-pty bytes emitted during resize.** `ghostty_terminal_resize`
   sends an in-band size report (mode 2048) and re-enables synchronized output;
   those bytes land in `TermCtx.out` via `on_write_pty`, but `terminalResize`
   (`app/src/main/cpp/terminal_jni.c`) never drains them — they sit until the

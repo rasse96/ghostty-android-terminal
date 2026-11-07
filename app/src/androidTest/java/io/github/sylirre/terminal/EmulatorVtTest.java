@@ -687,6 +687,34 @@ public class EmulatorVtTest {
     }
 
     @Test
+    public void searchRescansAfterResizeReflow() {
+        // "needle" starts at column 10; shrinking to 10 columns reflows it onto
+        // the next row, so matches cached before the resize point at the wrong
+        // cells. Stepping must re-scan and still land on "needle".
+        feed("0123456789needle");
+        int[] out = new int[2];
+        assertEquals(1, term.searchSet("needle", false, out));
+        term.resize(10, 5, 8, 16);
+        assertEquals(1, term.searchStep(1, out));
+        assertEquals(1, out[0]);
+        assertEquals("needle", term.selectionText());
+    }
+
+    @Test
+    public void inBandResizeReportReturnedFromResize() {
+        // Without mode 2048 a resize produces nothing for the PTY.
+        assertNull(term.resize(30, 6, 8, 16));
+        feed("\u001b[?2048h"); // enabling may itself report; feed() drops it
+        // The report (CSI 48 ; rows ; cols ; ... t) must come back from the
+        // resize itself, not sit buffered until the next feed.
+        byte[] r = term.resize(10, 5, 8, 16);
+        assertNotNull(r);
+        String s = new String(r, StandardCharsets.UTF_8);
+        assertTrue(s, s.startsWith("\u001b[48;5;10;"));
+        assertTrue(s, s.endsWith("t"));
+    }
+
+    @Test
     public void searchFindsMatchAcrossScrollbackAndReveals() {
         feed("needle\r\n");
         for (int i = 0; i < 10; i++) {

@@ -405,15 +405,18 @@ public final class TerminalSession {
         if (cols == lastCols && rows == lastRows) return;
         lastCols = cols;
         lastRows = rows;
-        emulator.resize(cols, rows, cellWidthPx, cellHeightPx);
+        byte[] response = emulator.resize(cols, rows, cellWidthPx, cellHeightPx);
         if (vm != null) {
             // A socketpair carries no winsize, so the guest is told over the
             // machine's control channel instead of by ioctl on this end.
             vm.setWinsize(vmTerminal, cols, rows);
-            return;
+        } else {
+            TerminalNative.ptySetSize(masterFd.getFd(), cols, rows, cellWidthPx,
+                    cellHeightPx);
         }
-        TerminalNative.ptySetSize(masterFd.getFd(), cols, rows, cellWidthPx,
-                cellHeightPx);
+        // Mode 2048's in-band size report; sent after the winsize update so
+        // a program that re-queries the size on receipt sees the new one.
+        if (response != null) writeRaw(response);
     }
 
     /** True for a session attached to a guest machine's terminal. */

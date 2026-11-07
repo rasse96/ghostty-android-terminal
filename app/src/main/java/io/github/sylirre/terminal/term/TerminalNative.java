@@ -210,7 +210,8 @@ public final class TerminalNative {
     /** Current title from OSC 0/2, or null if unset. */
     public static native String terminalTitle(long handle);
 
-    public static native void terminalResize(long handle, int cols, int rows,
+    /** Resizes; returns reply bytes for the PTY (mode 2048 report), or null. */
+    public static native byte[] terminalResize(long handle, int cols, int rows,
             int cellWidthPx, int cellHeightPx);
 
     /**

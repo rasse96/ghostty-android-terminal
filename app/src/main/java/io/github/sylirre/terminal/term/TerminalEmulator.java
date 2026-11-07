@@ -33,10 +33,10 @@ public final class TerminalEmulator implements AutoCloseable {
         return handle == 0 ? null : TerminalNative.terminalTitle(handle);
     }
 
-    public synchronized void resize(int cols, int rows, int cellWidthPx, int cellHeightPx) {
-        if (handle != 0) {
-            TerminalNative.terminalResize(handle, cols, rows, cellWidthPx, cellHeightPx);
-        }
+    /** Resizes; returns reply bytes for the PTY (in-band size report), or null. */
+    public synchronized byte[] resize(int cols, int rows, int cellWidthPx, int cellHeightPx) {
+        return handle == 0 ? null
+                : TerminalNative.terminalResize(handle, cols, rows, cellWidthPx, cellHeightPx);
     }
 
     /**

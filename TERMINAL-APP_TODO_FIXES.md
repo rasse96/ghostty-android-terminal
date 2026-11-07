@@ -15,7 +15,7 @@ Ghostty-header constant mirrors (all verified value-by-value).
 
 ## Confirmed bugs
 
-- [ ] **Search results go stale after a resize.** `terminalFeed` sets
+- [x] **Search results go stale after a resize.** `terminalFeed` sets
   `c->search_dirty` (terminal_jni.c:337) so navigation re-scans after new
   output, but `terminalResize` (terminal_jni.c:389) does not — and a resize
   reflows the primary screen, shifting the screen-coordinate matches. With the
@@ -108,7 +108,7 @@ Ghostty-header constant mirrors (all verified value-by-value).
 
 ## Cross-referenced from TERMINAL-APP_TODO.md (§ Correctness)
 
-- [ ] In-band resize (mode 2048) replies sit in `TermCtx.out` until the next
+- [x] In-band resize (mode 2048) replies sit in `TermCtx.out` until the next
   feed — `terminalResize` never drains the write-pty buffer.
 - [ ] No `onKeyUp`: key release events are never encoded (kitty keyboard
   protocol report-events).

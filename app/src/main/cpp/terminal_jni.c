@@ -303,6 +303,19 @@ Java_io_github_sylirre_terminal_term_TerminalNative_terminalSetCursorStyle(
     ghostty_terminal_set(c->term, GHOSTTY_TERMINAL_OPT_DEFAULT_CURSOR_BLINK, &b);
 }
 
+/* Hands the write-pty bytes buffered in c->out to Java and empties the
+ * buffer; null when there are none. Every call that can make Ghostty reply
+ * (feed, resize) must drain, or the reply waits for the next feed. */
+static jbyteArray drain_out(JNIEnv *env, TermCtx *c) {
+    if (c->out_len == 0) return NULL;
+    jbyteArray resp = (*env)->NewByteArray(env, (jsize)c->out_len);
+    if (!resp) return NULL; /* OOM pending; keep the bytes for next drain */
+    (*env)->SetByteArrayRegion(env, resp, 0, (jsize)c->out_len,
+                               (const jbyte *)c->out);
+    c->out_len = 0;
+    return resp;
+}
+
 /*
  * Feeds PTY output through the VT parser. Returns bytes the terminal wants
  * written back to the PTY (e.g. DA/DSR responses), or null if none.
@@ -349,12 +362,7 @@ Java_io_github_sylirre_terminal_term_TerminalNative_terminalFeed(
         }
     }
 
-    if (c->out_len == 0) return NULL;
-    jbyteArray resp = (*env)->NewByteArray(env, (jsize)c->out_len);
-    (*env)->SetByteArrayRegion(env, resp, 0, (jsize)c->out_len,
-                               (const jbyte *)c->out);
-    c->out_len = 0;
-    return resp;
+    return drain_out(env, c);
 }
 
 /* Returns and clears accumulated EVENT_* bits. */
@@ -388,11 +396,13 @@ Java_io_github_sylirre_terminal_term_TerminalNative_terminalTitle(
     return out;
 }
 
-JNIEXPORT void JNICALL
+/* Returns write-pty bytes the resize produced (the in-band size report of
+ * mode 2048), or null if none. */
+JNIEXPORT jbyteArray JNICALL
 Java_io_github_sylirre_terminal_term_TerminalNative_terminalResize(
     JNIEnv *env, jclass clazz, jlong h, jint cols, jint rows, jint cell_w,
     jint cell_h) {
-    (void)env; (void)clazz;
+    (void)clazz;
     TermCtx *c = (TermCtx *)(intptr_t)h;
     c->cols = (uint16_t)cols;
     c->rows = (uint16_t)rows;
@@ -400,6 +410,9 @@ Java_io_github_sylirre_terminal_term_TerminalNative_terminalResize(
     c->cell_h = (uint32_t)cell_h;
     ghostty_terminal_resize(c->term, (uint16_t)cols, (uint16_t)rows,
                             (uint32_t)cell_w, (uint32_t)cell_h);
+    /* A resize reflows the primary screen, moving every match. */
+    c->search_dirty = true;
+    return drain_out(env, c);
 }
 
 /* mode: 0 = top, 1 = bottom, 2 = by delta rows (negative is up). */
