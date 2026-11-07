@@ -5,6 +5,7 @@ package io.github.sylirre.terminal.ui;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
 
 import io.github.sylirre.terminal.term.TerminalNative;
 import io.github.sylirre.terminal.term.UserlandOptions;
@@ -23,6 +24,7 @@ public final class AppSettings {
 
     private static final String FILE = "settings";
     private static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";
+    private static final String KEY_MONET_ACCENT = "monet_accent";
     private static final String KEY_IMMERSIVE_MODE = "immersive_mode";
     private static final String KEY_RICH_KEYBOARD = "rich_keyboard";
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_enabled";
@@ -103,6 +105,10 @@ public final class AppSettings {
 
     private final SharedPreferences prefs;
 
+    public static AppSettings get(Context context) {
+        return new AppSettings(context);
+    }
+
     public AppSettings(Context context) {
         prefs = context.getApplicationContext()
                 .getSharedPreferences(FILE, Context.MODE_PRIVATE);
@@ -152,6 +158,20 @@ public final class AppSettings {
 
     public void setExtraKeysEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_EXTRA_KEYS_ENABLED, enabled).apply();
+    }
+
+    /**
+     * Whether the UI chrome (bars, tabs, keycaps, ripples) dynamically derives
+     * its accent colors from the Android 12+ Monet wallpaper palette. Defaults
+     * to true on Android 12+ (API 31+).
+     */
+    public boolean monetAccent() {
+        return prefs.getBoolean(KEY_MONET_ACCENT,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S);
+    }
+
+    public void setMonetAccent(boolean enabled) {
+        prefs.edit().putBoolean(KEY_MONET_ACCENT, enabled).apply();
     }
 
     /**

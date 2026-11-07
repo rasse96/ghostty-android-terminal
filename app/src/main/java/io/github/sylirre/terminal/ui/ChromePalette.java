@@ -11,6 +11,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.os.Build;
 import android.view.Gravity;
 
 import io.github.sylirre.terminal.R;
@@ -81,7 +82,35 @@ public final class ChromePalette {
     public static ChromePalette from(Context c, int terminalBg) {
         int bg = terminalBg | 0xFF000000; // theme colors are opaque; make sure
         int hairline = Chrome.dp(c, R.dimen.stroke_hairline);
-        if (Color.luminance(bg) < 0.5f) {
+        boolean isLight = Color.luminance(bg) >= 0.5f;
+
+        boolean useMonet = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && AppSettings.get(c).monetAccent();
+
+        int accent, accentPressed, accentDeep, accentTranslucent, onAccent;
+        if (useMonet) {
+            if (isLight) {
+                accent = c.getColor(android.R.color.system_accent1_600);
+                accentPressed = c.getColor(android.R.color.system_accent1_700);
+                accentDeep = c.getColor(android.R.color.system_accent1_800);
+                accentTranslucent = (accent & 0x00FFFFFF) | 0x33000000;
+                onAccent = Color.WHITE;
+            } else {
+                accent = c.getColor(android.R.color.system_accent1_300);
+                accentPressed = c.getColor(android.R.color.system_accent1_200);
+                accentDeep = c.getColor(android.R.color.system_accent1_700);
+                accentTranslucent = (accent & 0x00FFFFFF) | 0x33000000;
+                onAccent = Color.luminance(accent) > 0.6f ? 0xFF0B0B10 : Color.WHITE;
+            }
+        } else {
+            accent = Chrome.color(c, R.color.accent);
+            accentPressed = Chrome.color(c, R.color.accent_pressed);
+            accentDeep = Chrome.color(c, R.color.accent_deep);
+            accentTranslucent = Chrome.color(c, R.color.accent_translucent);
+            onAccent = Chrome.color(c, R.color.on_accent);
+        }
+
+        if (!isLight) {
             return new ChromePalette(false, hairline,
                     Chrome.color(c, R.color.surface_base),
                     Chrome.color(c, R.color.surface_1),
@@ -93,11 +122,7 @@ public final class ChromePalette {
                     Chrome.color(c, R.color.text_primary),
                     Chrome.color(c, R.color.text_secondary),
                     Chrome.color(c, R.color.text_tertiary),
-                    Chrome.color(c, R.color.accent),
-                    Chrome.color(c, R.color.accent_pressed),
-                    Chrome.color(c, R.color.accent_deep),
-                    Chrome.color(c, R.color.accent_translucent),
-                    Chrome.color(c, R.color.on_accent));
+                    accent, accentPressed, accentDeep, accentTranslucent, onAccent);
         }
         return new ChromePalette(true, hairline,
                 bg,
@@ -110,11 +135,7 @@ public final class ChromePalette {
                 0xFF1B1B22,
                 0xFF565660,
                 0xFF8B8B96,
-                Chrome.color(c, R.color.accent),
-                Chrome.color(c, R.color.accent_pressed),
-                Chrome.color(c, R.color.accent_deep),
-                Chrome.color(c, R.color.accent_translucent),
-                Chrome.color(c, R.color.on_accent));
+                accent, accentPressed, accentDeep, accentTranslucent, onAccent);
     }
 
     /** Per-channel lerp of {@code color} toward {@code toward} by {@code f}. */

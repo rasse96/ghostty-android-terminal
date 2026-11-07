@@ -965,7 +965,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             final IOException error = failure;
             final boolean cancelledFinal = wasCancelled;
             runOnUiThread(() -> {
-                ui.dismiss();
+                try {
+                    ui.dismiss();
+                } catch (Exception ignored) {}
                 if (isFinishing() || isDestroyed()) return;
                 if (cancelledFinal) {
                     Toast.makeText(this, R.string.backup_cancelled, Toast.LENGTH_LONG).show();
@@ -996,6 +998,12 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         ProgressHandle ui = showProgress(R.string.restore_in_progress,
                 R.string.restore_progress, cancelled);
         new Thread(() -> {
+            // Give any closing session processes a short moment to exit completely
+            // before extraction begins touching the tree.
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException ignored) {}
+
             IOException failure = null;
             boolean wasCancelled = false;
             // restore() reads the archive twice (probe + extract), so hand it a
@@ -1014,7 +1022,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             final IOException error = failure;
             final boolean cancelledFinal = wasCancelled;
             runOnUiThread(() -> {
-                ui.dismiss();
+                try {
+                    ui.dismiss();
+                } catch (Exception ignored) {}
                 if (isFinishing() || isDestroyed()) return;
                 if (error == null && !cancelledFinal) {
                     // The archive was installed as given. If it doesn't look like

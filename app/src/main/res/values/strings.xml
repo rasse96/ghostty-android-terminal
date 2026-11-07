@@ -223,6 +223,8 @@
     <!-- Settings: Terminal theme -->
     <string name="setting_theme_title">Terminal theme</string>
     <string name="setting_theme_summary">Fonts, colors, cursor shape and wallpaper for the terminal.</string>
+    <string name="setting_monet_accent_title">Dynamic system accent (Monet)</string>
+    <string name="setting_monet_accent_summary">Harmonize toolbar, tabs and active chrome accents with your device wallpaper colors.</string>
 
     <!-- Theme editor -->
     <string name="theme_activity_title">Terminal theme</string>

@@ -317,18 +317,36 @@ public final class UserlandRootfs {
     }
 
     /**
-     * Atomically swaps {@code staging} onto {@link #dir} with a rename(2) within
-     * filesDir. The destination is removed first because renameTo won't replace
-     * a non-empty directory; for a fresh {@link #install} that delete is a
-     * defensive no-op. Shared by {@link #install} and {@link #replaceFromTar} so
-     * {@link #dir} (the install marker) only ever names a finished rootfs.
+     * Atomically swaps {@code staging} onto {@link #dir} via a three-phase
+     * swap within filesDir:
+     *   1. Rename existing root to {@code userland.old}
+     *   2. Rename {@code staging} to {@link #dir}
+     *   3. Delete {@code userland.old}
+     *
+     * If the second rename fails, {@code userland.old} is rolled back to
+     * {@link #dir} so a failed or interrupted restore never leaves the user
+     * without a rootfs. Shared by {@link #install} and {@link #replaceFromTar}
+     * so {@link #dir} (the install marker) only ever names a finished rootfs.
      */
     private static void publish(Context ctx, File staging) throws IOException {
         File root = dir(ctx);
-        deleteRecursively(root);
+        File old = new File(ctx.getFilesDir(), "userland.old");
+        deleteRecursively(old);
+
+        boolean hadRoot = root.exists();
+        if (hadRoot && !root.renameTo(old)) {
+            deleteRecursively(staging);
+            throw new IOException("cannot move existing rootfs to " + old);
+        }
+
         if (!staging.renameTo(root)) {
+            if (hadRoot) old.renameTo(root);
             deleteRecursively(staging);
             throw new IOException("cannot publish rootfs to " + root);
+        }
+
+        if (hadRoot) {
+            deleteRecursively(old);
         }
     }
 

@@ -52,13 +52,22 @@ final class Chrome {
         return d;
     }
 
+    private static int rippleAccentColor(Context c) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                && AppSettings.get(c).monetAccent()) {
+            int accent = c.getColor(android.R.color.system_accent1_300);
+            return (accent & 0x00FFFFFF) | 0x33000000;
+        }
+        return color(c, R.color.accent_translucent);
+    }
+
     /**
      * A rounded fill with an accent-tinted press ripple clipped to the same
      * corners. {@code strokeRes == 0} draws no border.
      */
     static RippleDrawable ripple(Context c, int fillRes, float radiusPx, int strokeRes) {
         return new RippleDrawable(
-                ColorStateList.valueOf(color(c, R.color.accent_translucent)),
+                ColorStateList.valueOf(rippleAccentColor(c)),
                 rounded(c, fillRes, radiusPx, strokeRes),
                 roundedMask(radiusPx));
     }
@@ -69,7 +78,7 @@ final class Chrome {
      */
     static RippleDrawable rippleTransparent(Context c, float radiusPx) {
         return new RippleDrawable(
-                ColorStateList.valueOf(color(c, R.color.accent_translucent)),
+                ColorStateList.valueOf(rippleAccentColor(c)),
                 null, roundedMask(radiusPx));
     }
 
@@ -80,7 +89,7 @@ final class Chrome {
     static RippleDrawable rippleOver(Context c, android.graphics.drawable.Drawable content,
             float radiusPx) {
         return new RippleDrawable(
-                ColorStateList.valueOf(color(c, R.color.accent_translucent)),
+                ColorStateList.valueOf(rippleAccentColor(c)),
                 content, roundedMask(radiusPx));
     }
 

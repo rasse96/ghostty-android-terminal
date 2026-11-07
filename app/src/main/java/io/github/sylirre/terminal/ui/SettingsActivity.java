@@ -105,6 +105,13 @@ public final class SettingsActivity extends Activity {
                 () -> themeStore.current().name,
                 () -> startActivity(new Intent(this, ThemeActivity.class)))
                 .navigates());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            appearance.add(new Setting.Toggle(
+                    getString(R.string.setting_monet_accent_title),
+                    getString(R.string.setting_monet_accent_summary),
+                    settings::monetAccent,
+                    settings::setMonetAccent));
+        }
         appearance.add(new Setting.Choice(
                 getString(R.string.setting_terminal_bell_title),
                 getString(R.string.setting_terminal_bell_summary),

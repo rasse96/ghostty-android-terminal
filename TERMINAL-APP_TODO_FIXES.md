@@ -24,7 +24,7 @@ Ghostty-header constant mirrors (all verified value-by-value).
   point no longer resolves). Fix: set `c->search_dirty = true` in
   `terminalResize`.
 
-- [ ] **Restore can destroy both rootfs trees on a failed rename.**
+- [x] **Restore can destroy both rootfs trees on a failed rename.**
   `DebianRootfs.publish()` (DebianRootfs.java:194) is delete-then-rename: it
   `deleteRecursively(root)` (the user's current rootfs), then `renameTo`; if
   the rename fails it also deletes the staging tree. A failure between the
