@@ -37,12 +37,36 @@ public final class SessionCommand {
      *                the only generally writable place).
      * @param tmpDir  TMPDIR (the app's {@code files/tmp}, see {@link TmpDir}).
      */
+    private static void ensureShellRc(String homeDir) {
+        try {
+            java.io.File rc = new java.io.File(homeDir, ".shrc");
+            if (!rc.exists()) {
+                String content = "# A-SH Shell Config\n" +
+                        "export TERM=xterm-256color\n" +
+                        "export COLORTERM=truecolor\n" +
+                        "export HISTFILE=\"$HOME/.sh_history\"\n" +
+                        "export HISTSIZE=10000\n" +
+                        "export PS1='\\[\\033[1;36m\\]λ a-sh\\[\\033[0m\\]:\\[\\033[1;34m\\]\\w\\[\\033[0m\\] \\$ '\n" +
+                        "alias ll='ls -l'\n" +
+                        "alias la='ls -la'\n" +
+                        "alias ..='cd ..'\n" +
+                        "alias ...='cd ../..'\n" +
+                        "alias grep='grep --color=auto'\n" +
+                        "bind 'set enable-bracketed-paste on' 2>/dev/null || true\n";
+                java.nio.file.Files.write(rc.toPath(), content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } catch (Exception ignored) {}
+    }
+
     public static SessionCommand androidShell(String homeDir, String tmpDir) {
+        ensureShellRc(homeDir);
         String[] env = {
                 "PATH=/system/bin",
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
+                "ENV=" + homeDir + "/.shrc",
                 "TERM=xterm-256color",
+                "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
                 "ANDROID_ROOT=/system",
                 "ANDROID_DATA=/data",
@@ -117,6 +141,7 @@ public final class SessionCommand {
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin",
                     "TMPDIR=/data/data/com.termux/files/usr/tmp",
                     "TERM=xterm-256color",
+                    "COLORTERM=truecolor",
                     "LANG=en_US.UTF-8"
             };
             return new SessionCommand(suPath, new String[] {suPath, "-c",
@@ -134,6 +159,7 @@ public final class SessionCommand {
                     "PATH=/data/data/com.termux/files/usr/bin:/system/bin",
                     "TMPDIR=" + tmpDir,
                     "TERM=xterm-256color",
+                    "COLORTERM=truecolor",
                     "LANG=en_US.UTF-8",
                     "RISH_APPLICATION_ID=io.github.sylirre.terminal"
             };

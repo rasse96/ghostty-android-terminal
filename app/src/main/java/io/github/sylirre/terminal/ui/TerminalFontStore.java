@@ -24,6 +24,10 @@ final class TerminalFontStore {
     static final int BOLD = 2;
     static final int BOLD_ITALIC = 3;
 
+    static final String PRESET_SYSTEM = "system";
+    static final String PRESET_FIRA_CODE = "fira_code";
+    static final String PRESET_GOOGLE_SANS = "google_sans";
+
     private static final String DEFAULT_FILE = "terminal_font_default";
     private static final String ITALIC_FILE = "terminal_font_italic";
     private static final String BOLD_FILE = "terminal_font_bold";
@@ -94,6 +98,23 @@ final class TerminalFontStore {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    static Typeface loadPreset(Context context, String presetId) {
+        if (PRESET_FIRA_CODE.equals(presetId)) {
+            try {
+                return Typeface.createFromAsset(context.getAssets(), "fonts/fira_code.ttf");
+            } catch (Exception e) {
+                return Typeface.MONOSPACE;
+            }
+        } else if (PRESET_GOOGLE_SANS.equals(presetId)) {
+            try {
+                return Typeface.createFromAsset(context.getAssets(), "fonts/google_sans.ttf");
+            } catch (Exception e) {
+                return Typeface.MONOSPACE;
+            }
+        }
+        return Typeface.MONOSPACE;
     }
 
     static void clear(Context context, int kind) {

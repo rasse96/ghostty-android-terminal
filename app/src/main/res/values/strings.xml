@@ -276,6 +276,7 @@
     <string name="theme_font_remove">Remove</string>
     <string name="theme_font_failed">Couldn\'t load that font.</string>
     <string name="theme_font_removed">Font removed</string>
+    <string name="theme_font_applied">Font applied</string>
     <string-array name="theme_ansi_names">
         <item>Black</item>
         <item>Red</item>

@@ -428,6 +428,8 @@ public final class UserlandRootfs {
         argv.add("USER=" + UserlandIdentity.userNameForIdentity(root, opts.identity));
         argv.add("-E");
         argv.add("TERM=xterm-256color");
+        argv.add("-E");
+        argv.add("COLORTERM=truecolor");
         // Guest locale from the "Locale" setting; a blank value falls back to
         // C.UTF-8, which the minimal rootfs always provides.
         String locale = opts.locale == null ? "" : opts.locale.trim();

@@ -429,7 +429,7 @@ public final class ThemeActivity extends Activity {
         btnFontBoldItalicChoose = findViewById(R.id.theme_font_bold_italic_choose);
         btnFontBoldItalicRemove = findViewById(R.id.theme_font_bold_italic_remove);
 
-        btnFontDefaultChoose.setOnClickListener(v -> pickFont(REQ_PICK_DEFAULT_FONT));
+        btnFontDefaultChoose.setOnClickListener(v -> showFontChooserDialog());
         btnFontBoldChoose.setOnClickListener(v -> pickFont(REQ_PICK_BOLD_FONT));
         btnFontItalicChoose.setOnClickListener(v -> pickFont(REQ_PICK_ITALIC_FONT));
         btnFontBoldItalicChoose.setOnClickListener(v -> pickFont(REQ_PICK_BOLD_ITALIC_FONT));
@@ -484,20 +484,67 @@ public final class ThemeActivity extends Activity {
         toast(R.string.theme_font_removed);
     }
 
+    private void showFontChooserDialog() {
+        String[] options = new String[] {
+                "Fira Code (Nerd Font)",
+                "Google Sans (Flex Variable)",
+                "System Monospace",
+                "Custom Font File..."
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Terminal Font")
+                .setItems(options, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            settings.setTerminalFontPreset(TerminalFontStore.PRESET_FIRA_CODE);
+                            TerminalFontStore.clear(this, TerminalFontStore.DEFAULT);
+                            settings.setTerminalFontPath(null);
+                            updateFontButtons();
+                            applyFontsToPreview();
+                            toast(R.string.theme_font_applied);
+                            break;
+                        case 1:
+                            settings.setTerminalFontPreset(TerminalFontStore.PRESET_GOOGLE_SANS);
+                            TerminalFontStore.clear(this, TerminalFontStore.DEFAULT);
+                            settings.setTerminalFontPath(null);
+                            updateFontButtons();
+                            applyFontsToPreview();
+                            toast(R.string.theme_font_applied);
+                            break;
+                        case 2:
+                            settings.setTerminalFontPreset(TerminalFontStore.PRESET_SYSTEM);
+                            TerminalFontStore.clear(this, TerminalFontStore.DEFAULT);
+                            settings.setTerminalFontPath(null);
+                            updateFontButtons();
+                            applyFontsToPreview();
+                            toast(R.string.theme_font_applied);
+                            break;
+                        case 3:
+                            pickFont(REQ_PICK_DEFAULT_FONT);
+                            break;
+                    }
+                })
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
+    }
+
     private void updateFontButtons() {
-        boolean hasDefault = settings.terminalFontPath() != null;
+        boolean hasCustom = settings.terminalFontPath() != null;
+        String preset = settings.terminalFontPreset();
+        String presetLabel = TerminalFontStore.PRESET_FIRA_CODE.equals(preset) ? "Fira Code" :
+                (TerminalFontStore.PRESET_GOOGLE_SANS.equals(preset) ? "Google Sans" : "Monospace");
+        btnFontDefaultChoose.setText(hasCustom ? "Custom" : presetLabel);
+
         boolean hasBold = settings.terminalBoldFontPath() != null;
         boolean hasItalic = settings.terminalItalicFontPath() != null;
         boolean hasBoldItalic = settings.terminalBoldItalicFontPath() != null;
-        btnFontDefaultChoose.setText(hasDefault
-                ? R.string.theme_font_change : R.string.theme_font_choose);
         btnFontBoldChoose.setText(hasBold
                 ? R.string.theme_font_change : R.string.theme_font_choose);
         btnFontItalicChoose.setText(hasItalic
                 ? R.string.theme_font_change : R.string.theme_font_choose);
         btnFontBoldItalicChoose.setText(hasBoldItalic
                 ? R.string.theme_font_change : R.string.theme_font_choose);
-        btnFontDefaultRemove.setVisibility(hasDefault ? View.VISIBLE : View.GONE);
+        btnFontDefaultRemove.setVisibility(hasCustom ? View.VISIBLE : View.GONE);
         btnFontBoldRemove.setVisibility(hasBold ? View.VISIBLE : View.GONE);
         btnFontItalicRemove.setVisibility(hasItalic ? View.VISIBLE : View.GONE);
         btnFontBoldItalicRemove.setVisibility(hasBoldItalic ? View.VISIBLE : View.GONE);
@@ -523,6 +570,9 @@ public final class ThemeActivity extends Activity {
     private void applyFontsToPreview() {
         Typeface regular = loadPreviewFont(settings.terminalFontPath(),
                 () -> settings.setTerminalFontPath(null));
+        if (regular == null) {
+            regular = TerminalFontStore.loadPreset(this, settings.terminalFontPreset());
+        }
         Typeface bold = loadPreviewFont(settings.terminalBoldFontPath(),
                 () -> settings.setTerminalBoldFontPath(null));
         Typeface italic = loadPreviewFont(settings.terminalItalicFontPath(),

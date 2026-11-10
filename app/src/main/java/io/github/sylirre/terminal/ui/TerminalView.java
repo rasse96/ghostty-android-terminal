@@ -372,12 +372,13 @@ public class TerminalView extends View {
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScale(ScaleGestureDetector d) {
-                applyFontSize(fontSizeSp * d.getScaleFactor());
+                applyFontSize(fontSizeSp * d.getScaleFactor(), false);
                 return true; // consume so the factor stays incremental
             }
 
             @Override
             public void onScaleEnd(ScaleGestureDetector d) {
+                applyFontSize(fontSizeSp, true);
                 persistFontSize(); // once per gesture, not per frame
             }
         });
@@ -831,19 +832,38 @@ public class TerminalView extends View {
         persistFontSize();
     }
 
+    private final Runnable resizeDebounce = new Runnable() {
+        @Override
+        public void run() {
+            if (getWidth() > 0) {
+                updateGridSize(getWidth(), getHeight());
+                if (session != null) showSizeOverlay();
+                invalidate();
+            }
+        }
+    };
+
     public float fontSizeSp() {
         return fontSizeSp;
     }
 
     private void applyFontSize(float sp) {
+        applyFontSize(sp, true);
+    }
+
+    private void applyFontSize(float sp, boolean immediate) {
         sp = Math.max(MIN_FONT_SP, Math.min(MAX_FONT_SP, sp));
         if (sp == fontSizeSp) return;
         fontSizeSp = sp;
         setTextSizePx(spToPx(sp));
-        if (getWidth() > 0) {
-            updateGridSize(getWidth(), getHeight());
-            // Announce the new grid only for zoom-driven resizes; layout
-            // changes (keyboard show/hide) go through onSizeChanged silently.
+        removeCallbacks(resizeDebounce);
+        if (immediate) {
+            if (getWidth() > 0) {
+                updateGridSize(getWidth(), getHeight());
+                if (session != null) showSizeOverlay();
+            }
+        } else {
+            postDelayed(resizeDebounce, 120);
             if (session != null) showSizeOverlay();
         }
         invalidate();
@@ -1303,11 +1323,47 @@ public class TerminalView extends View {
         return text == null || text.length() == 0 ? null : text.toString();
     }
 
+    public static String sanitizeClipboardForTerminal(String text) {
+        if (text == null) return "";
+        // 1. Normalize line breaks: replace CRLF and CR with LF
+        text = text.replace("\r\n", "\n").replace('\r', '\n');
+        // 2. Remove UTF-8 Byte Order Mark (BOM) and zero-width invisible characters
+        text = text.replace("\uFEFF", "")
+                   .replace("\u200B", "")
+                   .replace("\u200C", "")
+                   .replace("\u200D", "")
+                   .replace("\u2060", "");
+        // 3. Normalize non-breaking spaces (\u00A0) to standard ASCII space
+        text = text.replace('\u00A0', ' ')
+                   .replace('\u202F', ' ');
+        // 4. Normalize typographical "curly" quotes and dashes copied from websites/markdown
+        text = text.replace('\u2018', '\'')  // left single quote
+                   .replace('\u2019', '\'')  // right single quote
+                   .replace('\u201C', '"')   // left double quote
+                   .replace('\u201D', '"')   // right double quote
+                   .replace('\u2014', '-')   // em dash
+                   .replace('\u2013', '-');  // en dash
+        return text;
+    }
+
     private void copySelection() {
         String text = session == null ? null : session.emulator.selectionText();
         if (text == null || text.isEmpty()) return;
+        // Clean trailing spaces per line while preserving indentation
+        String[] lines = text.split("\n", -1);
+        StringBuilder cleaned = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            String l = lines[i];
+            int end = l.length();
+            while (end > 0 && Character.isWhitespace(l.charAt(end - 1))) {
+                end--;
+            }
+            cleaned.append(l.substring(0, end));
+            if (i < lines.length - 1) cleaned.append('\n');
+        }
+        String result = cleaned.toString();
         ClipboardManager cm = getContext().getSystemService(ClipboardManager.class);
-        if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("terminal", text));
+        if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("terminal", result));
     }
 
     /**
@@ -1373,13 +1429,19 @@ public class TerminalView extends View {
         pixelScrollOffset = 0;
     }
 
-    private void pasteClipboard() {
+    public void pasteClipboard() {
         String text = clipboardText();
         if (text == null || session == null) return;
+        text = sanitizeClipboardForTerminal(text);
+        if (text.isEmpty()) return;
+
         byte[] encoded = session.emulator.encodePaste(text);
-        if (encoded == null) return;
+        byte[] bytesToSend = (encoded != null && encoded.length > 0)
+                ? encoded
+                : text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
         jumpToPresent();
-        session.writeBytes(encoded);
+        session.writeBytes(bytesToSend);
         invalidate();
     }
 
@@ -1790,15 +1852,18 @@ public class TerminalView extends View {
      * by a smooth-scroll offset.
      */
     private void drawRowBackground(Canvas canvas, ScreenSnapshot snap, int srcRow, float top) {
+        if (snap.bg == null || snap.bg.length == 0) return;
         int sc = snap.cols;
-        float bottom = top + cellHeight;
         int base = srcRow * sc;
+        if (base < 0 || base >= snap.bg.length) return;
+        int scClamped = Math.min(sc, snap.bg.length - base);
+        float bottom = top + cellHeight;
         int def = snap.defaultBg();
         int runStart = 0;
         int runBg = snap.bg[base];
-        for (int x = 1; x <= sc; x++) {
-            int bg = x < sc ? snap.bg[base + x] : 0;
-            if (x == sc || bg != runBg) {
+        for (int x = 1; x <= scClamped; x++) {
+            int bg = (x < scClamped && (base + x) < snap.bg.length) ? snap.bg[base + x] : 0;
+            if (x == scClamped || bg != runBg) {
                 if (runBg != def) {
                     bgPaint.setColor(runBg);
                     canvas.drawRect(textMarginLeft + runStart * cellWidth, top,
@@ -1817,29 +1882,32 @@ public class TerminalView extends View {
      * (drawn at a negative top) for smooth scrolling.
      */
     private void drawRowText(Canvas canvas, ScreenSnapshot snap, int srcRow, int sc, float top) {
+        if (snap.codepoints == null || snap.codepoints.length == 0) return;
         int rowBase = srcRow * sc;
+        if (rowBase < 0 || rowBase >= snap.codepoints.length) return;
+        int scClamped = Math.min(sc, snap.codepoints.length - rowBase);
         int runStart = -1, runFg = 0, runAttr = 0;
         runText.setLength(0);
-        for (int x = 0; x <= sc; x++) {
+        for (int x = 0; x <= scClamped; x++) {
             int i = rowBase + x;
-            int cp = x < sc ? snap.codepoints[i] : 0;
+            int cp = (x < scClamped && i < snap.codepoints.length) ? snap.codepoints[i] : 0;
             // On the blink "off" phase, treat blinking cells as blank so their
             // background stays but the glyph disappears.
             if (!textBlinkOn && cp != 0 && (snap.attrs[i] & TerminalNative.ATTR_BLINK) != 0) cp = 0;
-            int fg = x < sc ? snap.fg[i] : 0;
-            int attr = x < sc ? (snap.attrs[i] & ~TerminalNative.ATTR_WIDE) : 0;
+            int fg = (x < scClamped && i < snap.fg.length) ? snap.fg[i] : 0;
+            int attr = (x < scClamped && i < snap.attrs.length) ? (snap.attrs[i] & ~TerminalNative.ATTR_WIDE) : 0;
             // A grapheme cluster (base + combining/ZWJ marks) is several
             // codepoints rendered as one glyph; draw it whole so the font can
             // shape it, which means keeping it out of batched runs like wides.
-            String cluster = x < sc ? snap.graphemeAt(i) : null;
+            String cluster = (x < scClamped && i < snap.codepoints.length) ? snap.graphemeAt(i) : null;
             // Batched runs assume every glyph advances exactly cellWidth, which
             // only holds for the primary monospace font's own (ASCII) glyphs. A
             // non-ASCII codepoint may be drawn via font fallback at a different
             // advance, so keep it out of the batch and pin it below.
-            boolean nonAscii = x < sc && cp > 0x7F;
-            boolean breakRun = x == sc || cp == 0 || fg != runFg || attr != runAttr
+            boolean nonAscii = x < scClamped && cp > 0x7F;
+            boolean breakRun = x == scClamped || cp == 0 || fg != runFg || attr != runAttr
                     // Wide glyphs advance two cells; keep them out of batched runs.
-                    || (x < sc && (snap.attrs[i] & TerminalNative.ATTR_WIDE) != 0)
+                    || (x < scClamped && (snap.attrs[i] & TerminalNative.ATTR_WIDE) != 0)
                     || cluster != null
                     || nonAscii;
             if (breakRun && runStart >= 0 && runText.length() > 0) {

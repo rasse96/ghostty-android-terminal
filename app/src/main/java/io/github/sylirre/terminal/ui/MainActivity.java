@@ -509,11 +509,18 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         terminal.setBackgroundImage(bmp, alpha);
     }
 
-    /** Loads custom terminal font files, forgetting paths that no longer decode. */
+    /** Loads custom terminal font files or built-in presets (Fira Code, Google Sans). */
     private void applyTerminalFonts() {
         String regularPath = settings.terminalFontPath();
-        Typeface regular = TerminalFontStore.load(regularPath);
-        if (regularPath != null && regular == null) settings.setTerminalFontPath(null);
+        Typeface regular = null;
+        if (regularPath != null) {
+            regular = TerminalFontStore.load(regularPath);
+            if (regular == null) settings.setTerminalFontPath(null);
+        }
+        if (regular == null) {
+            String preset = settings.terminalFontPreset();
+            regular = TerminalFontStore.loadPreset(this, preset);
+        }
 
         String boldPath = settings.terminalBoldFontPath();
         Typeface bold = TerminalFontStore.load(boldPath);

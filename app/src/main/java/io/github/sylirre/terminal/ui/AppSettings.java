@@ -69,6 +69,7 @@ public final class AppSettings {
     private static final String KEY_VM_JIT = "vm_jit";
     private static final String KEY_ONBOARDING_COMPLETED = "onboarding_completed";
     private static final String KEY_USERLAND_DISTRO_ASSET = "userland_distro_asset";
+    private static final String KEY_TERMINAL_FONT_PRESET = "terminal_font_preset";
     private static final String KEY_TERMINAL_FONT_PATH = "terminal_font_path";
     private static final String KEY_TERMINAL_ITALIC_FONT_PATH = "terminal_italic_font_path";
     private static final String KEY_TERMINAL_BOLD_FONT_PATH = "terminal_bold_font_path";
@@ -744,6 +745,15 @@ public final class AppSettings {
 
     public void setUserlandDistroAsset(String assetName) {
         setNullableString(KEY_USERLAND_DISTRO_ASSET, assetName);
+    }
+
+    /** Selected built-in font preset: fira_code, google_sans, or system. */
+    public String terminalFontPreset() {
+        return prefs.getString(KEY_TERMINAL_FONT_PRESET, TerminalFontStore.PRESET_FIRA_CODE);
+    }
+
+    public void setTerminalFontPreset(String preset) {
+        setNullableString(KEY_TERMINAL_FONT_PRESET, preset);
     }
 
     /** Absolute path to the custom regular terminal font, or null for default monospace. */
