@@ -40,21 +40,17 @@ public final class SessionCommand {
     private static void ensureShellRc(String homeDir) {
         try {
             java.io.File rc = new java.io.File(homeDir, ".shrc");
-            if (!rc.exists()) {
-                String content = "# A-SH Shell Config\n" +
-                        "export TERM=xterm-256color\n" +
-                        "export COLORTERM=truecolor\n" +
-                        "export HISTFILE=\"$HOME/.sh_history\"\n" +
-                        "export HISTSIZE=10000\n" +
-                        "export PS1='\\[\\033[1;36m\\]λ a-sh\\[\\033[0m\\]:\\[\\033[1;34m\\]\\w\\[\\033[0m\\] \\$ '\n" +
-                        "alias ll='ls -l'\n" +
-                        "alias la='ls -la'\n" +
-                        "alias ..='cd ..'\n" +
-                        "alias ...='cd ../..'\n" +
-                        "alias grep='grep --color=auto'\n" +
-                        "bind 'set enable-bracketed-paste on' 2>/dev/null || true\n";
-                java.nio.file.Files.write(rc.toPath(), content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            }
+            String content = "# A-SH Shell Config\n" +
+                    "export TERM=xterm-256color\n" +
+                    "export COLORTERM=truecolor\n" +
+                    "export HISTFILE=\"$HOME/.sh_history\"\n" +
+                    "export HISTSIZE=10000\n" +
+                    "export PS1='$ '\n" +
+                    "alias ll='ls -l'\n" +
+                    "alias la='ls -la'\n" +
+                    "alias ..='cd ..'\n" +
+                    "alias ...='cd ../..'\n";
+            java.nio.file.Files.write(rc.toPath(), content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception ignored) {}
     }
 
