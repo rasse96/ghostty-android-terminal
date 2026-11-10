@@ -276,6 +276,14 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
 
             @Override
             public void onLaunchEnvironment(SessionProfile.Type type) {
+                if (type == SessionProfile.Type.USERLAND_ALPINE || type == SessionProfile.Type.USERLAND_DEBIAN) {
+                    if (!UserlandRootfs.isUsable(MainActivity.this)) {
+                        if (UserlandRootfs.assetAvailable(MainActivity.this)) {
+                            startOnboardingSetup();
+                            return;
+                        }
+                    }
+                }
                 if (type == SessionProfile.Type.GUEST_VM) {
                     VmMachine vm = VmMachine.get();
                     if (VmMachine.isRunning() && vm != null) {

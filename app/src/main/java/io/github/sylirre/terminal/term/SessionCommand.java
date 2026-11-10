@@ -3,6 +3,14 @@
 
 package io.github.sylirre.terminal.term;
 
+import android.content.Context;
+import android.content.res.AssetManager;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+
 /**
  * What a {@link TerminalSession} spawns: either a command to execve() or an
  * arm64chroot argv to run in-process ({@link TerminalNative#ptyCreateEmulator}).
@@ -39,18 +47,35 @@ public final class SessionCommand {
      */
     private static void ensureShellRc(String homeDir) {
         try {
-            java.io.File rc = new java.io.File(homeDir, ".shrc");
+            File rc = new File(homeDir, ".shrc");
             String content = "# A-SH Shell Config\n" +
                     "export TERM=xterm-256color\n" +
                     "export COLORTERM=truecolor\n" +
                     "export HISTFILE=\"$HOME/.sh_history\"\n" +
                     "export HISTSIZE=10000\n" +
-                    "export PS1='$ '\n" +
+                    "if [ -n \"$KSH_VERSION\" ]; then\n" +
+                    "  _ash_prompt() {\n" +
+                    "    local d=\"${PWD:-/}\"\n" +
+                    "    case \"$d\" in\n" +
+                    "      \"$HOME\"*) d=\"~${d#$HOME}\" ;;\n" +
+                    "    esac\n" +
+                    "    REPLY=\"$d $ \"\n" +
+                    "  }\n" +
+                    "  PS1='${| _ash_prompt; }'\n" +
+                    "elif [ -n \"$BASH_VERSION\" ]; then\n" +
+                    "  PS1='\\w $ '\n" +
+                    "else\n" +
+                    "  PS1='$ '\n" +
+                    "fi\n" +
                     "alias ll='ls -l'\n" +
                     "alias la='ls -la'\n" +
                     "alias ..='cd ..'\n" +
                     "alias ...='cd ../..'\n";
-            java.nio.file.Files.write(rc.toPath(), content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Files.write(rc.toPath(), content.getBytes(StandardCharsets.UTF_8));
+            File profile = new File(homeDir, ".profile");
+            Files.write(profile.toPath(), content.getBytes(StandardCharsets.UTF_8));
+            File mkshrc = new File(homeDir, ".mkshrc");
+            Files.write(mkshrc.toPath(), content.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {}
     }
 
@@ -61,6 +86,7 @@ public final class SessionCommand {
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
                 "ENV=" + homeDir + "/.shrc",
+                "PS1=~ $ ",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
@@ -75,6 +101,7 @@ public final class SessionCommand {
      * Spawns a privileged Root shell via su (/system/bin/su, /system/xbin/su, etc.).
      */
     public static SessionCommand rootShell(String homeDir, String tmpDir) {
+        ensureShellRc(homeDir);
         String suPath = "/system/bin/su";
         String[] candidates = {
                 "/system/bin/su",
@@ -84,7 +111,7 @@ public final class SessionCommand {
                 "/data/adb/magisk/su"
         };
         for (String c : candidates) {
-            if (new java.io.File(c).canExecute()) {
+            if (new File(c).canExecute()) {
                 suPath = c;
                 break;
             }
@@ -93,7 +120,10 @@ public final class SessionCommand {
                 "PATH=/sbin:/system/sbin:/system/bin:/system/xbin:/data/adb/ksu/bin:/data/adb/magisk",
                 "HOME=/data/local/tmp",
                 "TMPDIR=" + tmpDir,
+                "ENV=" + homeDir + "/.shrc",
+                "PS1=~ # ",
                 "TERM=xterm-256color",
+                "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8"
         };
         return new SessionCommand(suPath, new String[] {suPath, "-"}, env,
@@ -103,22 +133,69 @@ public final class SessionCommand {
     /**
      * Spawns a Shizuku / rish ADB-privileged shell.
      */
-    public static SessionCommand shizukuShell(String homeDir, String tmpDir) {
-        String rishPath = "/data/data/com.termux/files/home/bin/rish";
+    public static SessionCommand shizukuShell(Context context, String homeDir, String tmpDir) {
+        ensureShellRc(homeDir);
+        File binDir = new File(homeDir, "bin");
+        if (!binDir.exists()) binDir.mkdirs();
+        File rishFile = new File(binDir, "rish");
+        File dexFile = new File(binDir, "rish_shizuku.dex");
+
+        if (context != null) {
+            try {
+                if (!rishFile.exists() || !dexFile.exists()) {
+                    AssetManager am = context.getAssets();
+                    try (InputStream in = am.open("rish/rish");
+                         FileOutputStream out = new FileOutputStream(rishFile)) {
+                        byte[] buf = new byte[4096];
+                        int r;
+                        while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                    }
+                    rishFile.setExecutable(true, false);
+
+                    try (InputStream in = am.open("rish/rish_shizuku.dex");
+                         FileOutputStream out = new FileOutputStream(dexFile)) {
+                        byte[] buf = new byte[4096];
+                        int r;
+                        while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                    }
+                    dexFile.setReadOnly();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String pkgId = context != null ? context.getPackageName() : "io.github.sylirre.terminal";
         String[] env = {
-                "PATH=/system/bin:/data/data/com.termux/files/home/bin",
+                "PATH=" + binDir.getAbsolutePath() + ":/system/bin",
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
+                "ENV=" + homeDir + "/.shrc",
+                "PS1=~ $ ",
                 "TERM=xterm-256color",
+                "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
-                "RISH_APPLICATION_ID=io.github.sylirre.terminal"
+                "RISH_APPLICATION_ID=" + pkgId
         };
-        if (new java.io.File(rishPath).canExecute()) {
-            return new SessionCommand("/system/bin/sh", new String[] {"/system/bin/sh", rishPath},
+
+        if (rishFile.canExecute() && dexFile.exists()) {
+            return new SessionCommand("/system/bin/sh",
+                    new String[] {"/system/bin/sh", rishFile.getAbsolutePath()},
                     env, homeDir, "rish", false);
         }
+
+        // Fallback: check Termux path
+        String fallbackRish = "/data/data/com.termux/files/home/bin/rish";
+        if (new File(fallbackRish).canExecute()) {
+            return new SessionCommand("/system/bin/sh",
+                    new String[] {"/system/bin/sh", fallbackRish},
+                    env, homeDir, "rish", false);
+        }
+
         return new SessionCommand("/system/bin/sh", new String[] {"sh"}, env,
                 homeDir, "shizuku", false);
+    }
+
+    public static SessionCommand shizukuShell(String homeDir, String tmpDir) {
+        return shizukuShell(null, homeDir, tmpDir);
     }
 
     /**

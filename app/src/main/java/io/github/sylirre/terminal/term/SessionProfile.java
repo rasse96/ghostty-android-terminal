@@ -76,7 +76,7 @@ public final class SessionProfile {
                 return SessionCommand.rootShell(homeDir, tmpDir);
 
             case SHIZUKU_RISH:
-                return SessionCommand.shizukuShell(homeDir, tmpDir);
+                return SessionCommand.shizukuShell(context, homeDir, tmpDir);
 
             case SSH:
                 return SessionCommand.sshCommand("127.0.0.1", 8022, null, homeDir, tmpDir);

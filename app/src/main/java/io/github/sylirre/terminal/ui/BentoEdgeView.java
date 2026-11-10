@@ -65,6 +65,7 @@ public class BentoEdgeView extends FrameLayout {
     private View handleProgressDot;
 
     private boolean isDrawerOpen = false;
+    private int drawerWidth = 0;
     private float handleY = -1;
     private float touchStartY = 0;
     private float touchStartX = 0;
@@ -82,6 +83,17 @@ public class BentoEdgeView extends FrameLayout {
     public BentoEdgeView(Context context, AttributeSet attrs) {
         super(context, attrs);
         init(context);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (w > 0) {
+            drawerWidth = Math.min(dp(320), (int) (w * 0.85f));
+            if (!isDrawerOpen && drawerContainer != null) {
+                drawerContainer.setTranslationX(drawerWidth);
+            }
+        }
     }
 
     public BentoEdgeView(Context context, AttributeSet attrs, int defStyleAttr) {
@@ -112,7 +124,7 @@ public class BentoEdgeView extends FrameLayout {
         addView(scrimView);
 
         // 2. Expandable Bento Drawer
-        int drawerWidth = Math.min(dp(320), (int) (getResources().getDisplayMetrics().widthPixels * 0.85f));
+        drawerWidth = Math.min(dp(320), (int) (getResources().getDisplayMetrics().widthPixels * 0.85f));
         drawerContainer = new FrameLayout(context);
         LayoutParams drawerLp = new LayoutParams(drawerWidth, LayoutParams.MATCH_PARENT, Gravity.END);
         drawerContainer.setLayoutParams(drawerLp);
@@ -188,6 +200,10 @@ public class BentoEdgeView extends FrameLayout {
                         v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                         expandDrawer(true);
                     }
+                    isDraggingHandle = false;
+                    return true;
+
+                case MotionEvent.ACTION_CANCEL:
                     isDraggingHandle = false;
                     return true;
             }
@@ -374,6 +390,10 @@ public class BentoEdgeView extends FrameLayout {
 
         // Re-render sessions list to apply theme colors
         renderSessions();
+
+        if (!isDrawerOpen && handlePill != null) {
+            handlePill.setVisibility(VISIBLE);
+        }
     }
 
     public void update(List<String> titles, int activeIndex, List<TabStripView.TabProgress> progress) {
@@ -397,6 +417,10 @@ public class BentoEdgeView extends FrameLayout {
         handleProgressDot.setVisibility(hasProgress ? VISIBLE : GONE);
 
         renderSessions();
+
+        if (!isDrawerOpen && handlePill != null) {
+            handlePill.setVisibility(VISIBLE);
+        }
     }
 
     private void renderSessions() {
@@ -484,48 +508,83 @@ public class BentoEdgeView extends FrameLayout {
         if (isDrawerOpen) return;
         isDrawerOpen = true;
 
-        scrimView.setVisibility(VISIBLE);
-        drawerContainer.setVisibility(VISIBLE);
-        handlePill.setVisibility(GONE);
+        if (scrimView != null) scrimView.animate().setListener(null);
+        if (drawerContainer != null) drawerContainer.animate().setListener(null);
+
+        if (scrimView != null) scrimView.setVisibility(VISIBLE);
+        if (drawerContainer != null) drawerContainer.setVisibility(VISIBLE);
+        if (handlePill != null) handlePill.setVisibility(GONE);
 
         if (animate) {
-            scrimView.animate().alpha(1f).setDuration(220).start();
-            drawerContainer.animate()
-                    .translationX(0f)
-                    .setInterpolator(new DecelerateInterpolator(1.8f))
-                    .setDuration(260)
-                    .start();
+            if (scrimView != null) scrimView.animate().alpha(1f).setDuration(220).start();
+            if (drawerContainer != null) {
+                drawerContainer.animate()
+                        .translationX(0f)
+                        .setInterpolator(new DecelerateInterpolator(1.8f))
+                        .setDuration(260)
+                        .start();
+            }
         } else {
-            scrimView.setAlpha(1f);
-            drawerContainer.setTranslationX(0f);
+            if (scrimView != null) scrimView.setAlpha(1f);
+            if (drawerContainer != null) drawerContainer.setTranslationX(0f);
         }
     }
 
     public void collapseDrawer(boolean animate) {
-        if (!isDrawerOpen) return;
+        if (!isDrawerOpen) {
+            if (handlePill != null) handlePill.setVisibility(VISIBLE);
+            if (drawerContainer != null) drawerContainer.setVisibility(GONE);
+            if (scrimView != null) scrimView.setVisibility(GONE);
+            return;
+        }
         isDrawerOpen = false;
 
-        handlePill.setVisibility(VISIBLE);
+        if (handlePill != null) handlePill.setVisibility(VISIBLE);
+        int targetX = drawerWidth > 0 ? drawerWidth : (drawerContainer != null && drawerContainer.getWidth() > 0 ? drawerContainer.getWidth() : dp(320));
+
+        if (scrimView != null) scrimView.animate().setListener(null);
+        if (drawerContainer != null) drawerContainer.animate().setListener(null);
+
         if (animate) {
-            scrimView.animate().alpha(0f).setDuration(180).start();
-            drawerContainer.animate()
-                    .translationX(drawerContainer.getWidth())
-                    .setInterpolator(new DecelerateInterpolator(1.8f))
-                    .setDuration(220)
-                    .setListener(new AnimatorListenerAdapter() {
-                        @Override
-                        public void onAnimationEnd(Animator animation) {
-                            drawerContainer.setVisibility(GONE);
-                            scrimView.setVisibility(GONE);
-                        }
-                    })
-                    .start();
+            if (scrimView != null) scrimView.animate().alpha(0f).setDuration(180).start();
+            if (drawerContainer != null) {
+                drawerContainer.animate()
+                        .translationX(targetX)
+                        .setInterpolator(new DecelerateInterpolator(1.8f))
+                        .setDuration(220)
+                        .setListener(new AnimatorListenerAdapter() {
+                            @Override
+                            public void onAnimationEnd(Animator animation) {
+                                if (drawerContainer != null) drawerContainer.animate().setListener(null);
+                                if (scrimView != null) scrimView.animate().setListener(null);
+                                if (!isDrawerOpen) {
+                                    if (drawerContainer != null) drawerContainer.setVisibility(GONE);
+                                    if (scrimView != null) scrimView.setVisibility(GONE);
+                                    if (handlePill != null) handlePill.setVisibility(VISIBLE);
+                                }
+                            }
+                        })
+                        .start();
+            }
         } else {
-            scrimView.setAlpha(0f);
-            scrimView.setVisibility(GONE);
-            drawerContainer.setVisibility(GONE);
-            drawerContainer.setTranslationX(drawerContainer.getWidth());
+            if (scrimView != null) {
+                scrimView.setAlpha(0f);
+                scrimView.setVisibility(GONE);
+            }
+            if (drawerContainer != null) {
+                drawerContainer.setVisibility(GONE);
+                drawerContainer.setTranslationX(targetX);
+            }
+            if (handlePill != null) handlePill.setVisibility(VISIBLE);
         }
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (!isDrawerOpen) {
+            return false;
+        }
+        return super.onTouchEvent(event);
     }
 
     public boolean isDrawerOpen() {
