@@ -56,30 +56,29 @@ public final class SessionCommand {
                     "\n" +
                     "if [ -n \"$KSH_VERSION\" ]; then\n" +
                     "  _ash_prompt() {\n" +
-                    "    local d=\"${PWD:-/}\"\n" +
-                    "    case \"$d\" in\n" +
-                    "      \"$HOME\"*) d=\"~${d#$HOME}\" ;;\n" +
+                    "    local p=\"$PWD\"\n" +
+                    "    case \"$p\" in\n" +
+                    "      *io.github.sylirre.terminal/files*)\n" +
+                    "        p=\"~${p#*io.github.sylirre.terminal/files}\"\n" +
+                    "        ;;\n" +
+                    "      *)\n" +
+                    "        if [ -n \"$HOME\" ] && [ \"$HOME\" != \"/\" ]; then\n" +
+                    "          case \"$p\" in\n" +
+                    "            \"$HOME\"*) p=\"~${p#$HOME}\" ;;\n" +
+                    "          esac\n" +
+                    "        fi\n" +
+                    "        ;;\n" +
                     "    esac\n" +
-                    "    printf '\\033]0;%s\\007' \"$d\"\n" +
-                    "    REPLY=\"\\001\\033[1;36m\\001$d\\001\\033[0m\\001\\n\\001\\033[1;32m\\001❯\\001\\033[0m\\001 \"\n" +
+                    "    [ -z \"$p\" ] && p=\"~\"\n" +
+                    "    local s=\"$\"\n" +
+                    "    [ \"$(id -u 2>/dev/null)\" = \"0\" ] && s=\"#\"\n" +
+                    "    REPLY=\"$p\n$s \"\n" +
                     "  }\n" +
                     "  PS1='${| _ash_prompt; }'\n" +
                     "elif [ -n \"$BASH_VERSION\" ]; then\n" +
-                    "  _bash_prompt() {\n" +
-                    "    local d=\"${PWD/#$HOME/~}\"\n" +
-                    "    printf '\\033]0;%s\\007' \"$d\"\n" +
-                    "  }\n" +
-                    "  PROMPT_COMMAND=_bash_prompt\n" +
-                    "  PS1='\\[\\033[1;36m\\]\\w\\[\\033[0m\\]\\n\\[\\033[1;32m\\]❯\\[\\033[0m\\] '\n" +
+                    "  PS1='\\w\\n\\$ '\n" +
                     "else\n" +
-                    "  _posix_prompt() {\n" +
-                    "    local d=\"${PWD:-/}\"\n" +
-                    "    case \"$d\" in\n" +
-                    "      \"$HOME\"*) d=\"~${d#$HOME}\" ;;\n" +
-                    "    esac\n" +
-                    "    printf '\\033]0;%s\\007%s\\n❯ ' \"$d\" \"$d\"\n" +
-                    "  }\n" +
-                    "  PS1='$(_posix_prompt) '\n" +
+                    "  PS1='$ '\n" +
                     "fi\n" +
                     "\n" +
                     "alias ll='ls -l'\n" +
@@ -103,7 +102,7 @@ public final class SessionCommand {
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
                 "ENV=" + homeDir + "/.shrc",
-                "PS1=~\\n❯ ",
+                "PS1=$ ",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
@@ -138,7 +137,7 @@ public final class SessionCommand {
                 "HOME=/data/local/tmp",
                 "TMPDIR=" + tmpDir,
                 "ENV=" + homeDir + "/.shrc",
-                "PS1=~ # ",
+                "PS1=# ",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8"
@@ -186,7 +185,7 @@ public final class SessionCommand {
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
                 "ENV=" + homeDir + "/.shrc",
-                "PS1=~ $ ",
+                "PS1=$ ",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
