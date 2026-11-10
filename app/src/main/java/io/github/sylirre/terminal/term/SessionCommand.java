@@ -52,6 +52,124 @@ public final class SessionCommand {
     }
 
     /**
+     * Spawns a privileged Root shell via su (/system/bin/su, /system/xbin/su, etc.).
+     */
+    public static SessionCommand rootShell(String homeDir, String tmpDir) {
+        String suPath = "/system/bin/su";
+        String[] candidates = {
+                "/system/bin/su",
+                "/system/xbin/su",
+                "/data/adb/ksu/bin/su",
+                "/data/adb/ap/bin/su",
+                "/data/adb/magisk/su"
+        };
+        for (String c : candidates) {
+            if (new java.io.File(c).canExecute()) {
+                suPath = c;
+                break;
+            }
+        }
+        String[] env = {
+                "PATH=/sbin:/system/sbin:/system/bin:/system/xbin:/data/adb/ksu/bin:/data/adb/magisk",
+                "HOME=/data/local/tmp",
+                "TMPDIR=" + tmpDir,
+                "TERM=xterm-256color",
+                "LANG=en_US.UTF-8"
+        };
+        return new SessionCommand(suPath, new String[] {suPath, "-"}, env,
+                homeDir, "root", false);
+    }
+
+    /**
+     * Spawns a Shizuku / rish ADB-privileged shell.
+     */
+    public static SessionCommand shizukuShell(String homeDir, String tmpDir) {
+        String rishPath = "/data/data/com.termux/files/home/bin/rish";
+        String[] env = {
+                "PATH=/system/bin:/data/data/com.termux/files/home/bin",
+                "HOME=" + homeDir,
+                "TMPDIR=" + tmpDir,
+                "TERM=xterm-256color",
+                "LANG=en_US.UTF-8",
+                "RISH_APPLICATION_ID=io.github.sylirre.terminal"
+        };
+        if (new java.io.File(rishPath).canExecute()) {
+            return new SessionCommand("/system/bin/sh", new String[] {"/system/bin/sh", rishPath},
+                    env, homeDir, "rish", false);
+        }
+        return new SessionCommand("/system/bin/sh", new String[] {"sh"}, env,
+                homeDir, "shizuku", false);
+    }
+
+    /**
+     * Bridge into Termux native environment.
+     * Attempts to launch Termux's bash environment directly via su, rish, or SSH.
+     */
+    public static SessionCommand termuxBridge(String homeDir, String tmpDir) {
+        String termuxBash = "/data/data/com.termux/files/usr/bin/bash";
+        String rishPath = "/data/data/com.termux/files/home/bin/rish";
+        String suPath = "/system/bin/su";
+
+        if (new java.io.File(suPath).canExecute()) {
+            String[] env = {
+                    "PREFIX=/data/data/com.termux/files/usr",
+                    "HOME=/data/data/com.termux/files/home",
+                    "PATH=/data/data/com.termux/files/usr/bin:/system/bin",
+                    "TMPDIR=/data/data/com.termux/files/usr/tmp",
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8"
+            };
+            return new SessionCommand(suPath, new String[] {suPath, "-c",
+                    "export PREFIX=/data/data/com.termux/files/usr; " +
+                    "export HOME=/data/data/com.termux/files/home; " +
+                    "export PATH=$PREFIX/bin:$PATH; " +
+                    "exec /data/data/com.termux/files/usr/bin/bash -l"},
+                    env, homeDir, "termux", false);
+        }
+
+        if (new java.io.File(rishPath).canExecute()) {
+            String[] env = {
+                    "PREFIX=/data/data/com.termux/files/usr",
+                    "HOME=/data/data/com.termux/files/home",
+                    "PATH=/data/data/com.termux/files/usr/bin:/system/bin",
+                    "TMPDIR=" + tmpDir,
+                    "TERM=xterm-256color",
+                    "LANG=en_US.UTF-8",
+                    "RISH_APPLICATION_ID=io.github.sylirre.terminal"
+            };
+            return new SessionCommand("/system/bin/sh", new String[] {"/system/bin/sh", rishPath},
+                    env, homeDir, "termux", false);
+        }
+
+        // Fallback to Android shell with Termux env configured
+        String[] env = {
+                "PREFIX=/data/data/com.termux/files/usr",
+                "HOME=/data/data/com.termux/files/home",
+                "PATH=/data/data/com.termux/files/usr/bin:/system/bin",
+                "TMPDIR=" + tmpDir,
+                "TERM=xterm-256color",
+                "LANG=en_US.UTF-8"
+        };
+        return new SessionCommand("/system/bin/sh", new String[] {"sh"}, env,
+                homeDir, "termux", false);
+    }
+
+    /**
+     * SSH connection session.
+     */
+    public static SessionCommand sshCommand(String host, int port, String user, String homeDir, String tmpDir) {
+        String target = (user != null && !user.isEmpty()) ? (user + "@" + host) : host;
+        String[] argv = new String[] {"ssh", "-p", String.valueOf(port), target};
+        String[] env = {
+                "PATH=/system/bin:/usr/bin:/bin",
+                "HOME=" + homeDir,
+                "TMPDIR=" + tmpDir,
+                "TERM=xterm-256color"
+        };
+        return new SessionCommand("/system/bin/sh", argv, env, homeDir, "ssh:" + host, false);
+    }
+
+    /**
      * Default tab label for a login shell: the basename of its executable path,
      * e.g. {@code /system/bin/sh -> "sh"}, {@code /bin/bash -> "bash"}. Any
      * arguments must already be stripped by the caller. Falls back to

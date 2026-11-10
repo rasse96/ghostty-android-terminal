@@ -112,6 +112,11 @@ public final class SettingsActivity extends Activity {
                     settings::monetAccent,
                     settings::setMonetAccent));
         }
+        appearance.add(new Setting.Toggle(
+                getString(R.string.setting_bento_edge_bar_title),
+                getString(R.string.setting_bento_edge_bar_summary),
+                settings::bentoEdgeBar,
+                settings::setBentoEdgeBar));
         appearance.add(new Setting.Choice(
                 getString(R.string.setting_terminal_bell_title),
                 getString(R.string.setting_terminal_bell_summary),

@@ -515,4 +515,34 @@
         <item>bksp</item>
         <item>ins</item>
     </string-array>
+
+    <!-- Bento Edge Bar & Multi-Environment -->
+    <string name="setting_bento_edge_bar_title">Bento Edge Bar</string>
+    <string name="setting_bento_edge_bar_summary">Dock tabs to a sleek edge handle with expandable Bento drawer for 100% full-screen terminal.</string>
+    <string name="bento_drawer_title">Sessions</string>
+    <string name="bento_new_session">+ New Session</string>
+    <string name="bento_action_search">Find</string>
+    <string name="bento_action_themes">Themes</string>
+    <string name="bento_action_settings">Settings</string>
+    <string name="bento_action_toggle_topbar">Top Bar</string>
+    <string name="bento_active_badge">Active</string>
+    <string name="bento_environment_section">Environments</string>
+
+    <!-- Environments -->
+    <string name="env_alpine_name">Alpine Linux</string>
+    <string name="env_alpine_desc">Lightweight userland with apk</string>
+    <string name="env_debian_name">Debian Linux</string>
+    <string name="env_debian_desc">Full glibc userland with apt, python &amp; gcc</string>
+    <string name="env_termux_name">Termux Native</string>
+    <string name="env_termux_desc">Termux environment &amp; packages</string>
+    <string name="env_root_name">Root Shell (su)</string>
+    <string name="env_root_desc">Direct Magisk / KernelSU / APatch root</string>
+    <string name="env_shizuku_name">Shizuku (rish)</string>
+    <string name="env_shizuku_desc">ADB-level privileged shell</string>
+    <string name="env_android_name">Android Shell</string>
+    <string name="env_android_desc">Standard /system/bin/sh</string>
+    <string name="env_vm_name">Guest Linux VM</string>
+    <string name="env_vm_desc">Virtual machine kernel console</string>
+    <string name="env_ssh_name">SSH Quick Connect</string>
+    <string name="env_ssh_desc">Connect to Termux or remote host</string>
 </resources>

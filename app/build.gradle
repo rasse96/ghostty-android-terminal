@@ -27,11 +27,12 @@ android {
         }
     }
 
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-        }
-    }
+    // Native library libterm.so is bundled via src/main/jniLibs on-device.
+    // externalNativeBuild {
+    //     cmake {
+    //         path "src/main/cpp/CMakeLists.txt"
+    //     }
+    // }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

@@ -48,6 +48,16 @@ public final class SessionManager {
                 : SessionCommand.androidShell(
                         context.getFilesDir().getAbsolutePath(),
                         TmpDir.ensure(context));
+        return create(context, cols, rows, cellWidthPx, cellHeightPx, scrollbackLines,
+                command, terminateProcessesOnExit, listener);
+    }
+
+    /**
+     * Spawns a session from an explicit {@link SessionCommand}.
+     */
+    public TerminalSession create(Context context, int cols, int rows,
+            int cellWidthPx, int cellHeightPx, int scrollbackLines, SessionCommand command,
+            boolean terminateProcessesOnExit, TerminalSession.Listener listener) throws IOException {
         TerminalSession s = new TerminalSession(cols, rows, cellWidthPx,
                 cellHeightPx, scrollbackLines, command, terminateProcessesOnExit,
                 listener);

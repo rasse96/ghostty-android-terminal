@@ -34,10 +34,14 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import io.github.sylirre.terminal.term.SessionCommand;
+import io.github.sylirre.terminal.term.SessionProfile;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -102,6 +106,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     private TextView promptPrevButton;
     private TextView promptNextButton;
     private View mainTopBar;
+    private BentoEdgeView bentoEdgeView;
     /** Active chrome palette, derived from the terminal theme (see applyChrome). */
     private ChromePalette chrome;
     private long lastClipToastUptime;
@@ -252,6 +257,67 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             }
         });
 
+        bentoEdgeView = findViewById(R.id.bento_edge_view);
+        bentoEdgeView.setListener(new BentoEdgeView.Listener() {
+            @Override
+            public void onTabSelected(int index) {
+                switchTo(sessions.sessions().get(index));
+            }
+
+            @Override
+            public void onTabClosed(int index) {
+                confirmCloseTab(sessions.sessions().get(index));
+            }
+
+            @Override
+            public void onNewSession() {
+                createSession(userlandByDefault());
+            }
+
+            @Override
+            public void onLaunchEnvironment(SessionProfile.Type type) {
+                if (type == SessionProfile.Type.GUEST_VM) {
+                    VmMachine vm = VmMachine.get();
+                    if (VmMachine.isRunning() && vm != null) {
+                        int free = freeVmTerminal(vm);
+                        if (free >= 0) {
+                            openVmTab(vm, free);
+                        } else {
+                            confirmStopVm();
+                        }
+                    } else if (VmImages.isInstalled(MainActivity.this) || VmImages.assetsAvailable(MainActivity.this)) {
+                        startVm();
+                    } else {
+                        Toast.makeText(MainActivity.this, R.string.toast_vm_no_images, Toast.LENGTH_LONG).show();
+                    }
+                } else {
+                    createSessionWithProfile(SessionProfile.of(type));
+                }
+            }
+
+            @Override
+            public void onSearchClicked() {
+                showSearch();
+            }
+
+            @Override
+            public void onThemesClicked() {
+                startActivity(new Intent(MainActivity.this, ThemeActivity.class));
+            }
+
+            @Override
+            public void onSettingsClicked() {
+                startActivityForResult(new Intent(MainActivity.this, SettingsActivity.class), REQ_SETTINGS);
+            }
+
+            @Override
+            public void onToggleTopBarClicked() {
+                boolean bento = settings.bentoEdgeBar();
+                settings.setBentoEdgeBar(!bento);
+                applyUiMode();
+            }
+        });
+
         for (TerminalSession s : sessions.sessions()) {
             s.setListener(this);
         }
@@ -331,6 +397,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         extraKeys.setRowEnabled(settings.extraKeysEnabled());
         extraKeys.setHideWhenKeyboardHidden(settings.hideExtraKeysWhenKeyboardHidden());
         extraKeys.setKeyVerticalPaddingDp(settings.extraKeysVerticalPadding());
+        applyUiMode();
     }
 
     @Override
@@ -382,6 +449,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         styleTopBarButton(findViewById(R.id.settings_button));
         setSearchButtonActive(searchBar.isOpen());
         tabs.applyPalette(p);
+        if (bentoEdgeView != null) {
+            bentoEdgeView.applyPalette(p);
+        }
         extraKeys.applyPalette(p);
         searchBar.applyPalette(p);
         if (Build.VERSION.SDK_INT >= 30) {
@@ -511,6 +581,47 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 Toast.makeText(this, getString(R.string.toast_shell_start_failed,
                         e.getMessage()), Toast.LENGTH_LONG).show();
                 if (sessions.isEmpty()) finishAndRemoveTask();
+            }
+        }
+    }
+
+    private void createSessionWithProfile(SessionProfile profile) {
+        try {
+            UserlandOptions userlandOptions = new UserlandOptions(
+                    settings.userlandLoginShell(), storageBindingEnabledForNewSession(),
+                    settings.userlandIdentity(), settings.userlandHome(),
+                    settings.userlandWorkDir(), settings.userlandLocale(),
+                    settings.userlandPath(),
+                    settings.userlandJitEnabled(), settings.userlandJitBufferMb(),
+                    settings.userlandChrootNgEnabled());
+            SessionCommand cmd = profile.buildCommand(this, userlandOptions);
+            TerminalSession s = sessions.create(this,
+                    terminal.gridCols(), terminal.gridRows(),
+                    terminal.cellWidthPx(), terminal.cellHeightPx(),
+                    settings.scrollbackLines(), cmd,
+                    settings.terminateProcessesOnExit(), this);
+            switchTo(s);
+            applyTheme();
+            if (settings.touchKeyboard()) showKeyboard();
+            SessionService.refresh(this);
+            maybePromptBatteryOptimization();
+        } catch (IOException e) {
+            Toast.makeText(this, "Failed to launch " + profile.name + ": " + e.getMessage(), Toast.LENGTH_LONG).show();
+            createSession(false);
+        }
+    }
+
+    private void applyUiMode() {
+        boolean bento = settings.bentoEdgeBar();
+        mainTopBar.setVisibility(bento ? View.GONE : View.VISIBLE);
+        if (bentoEdgeView != null) {
+            bentoEdgeView.setVisibility(bento ? View.VISIBLE : View.GONE);
+        }
+        if (searchBar != null) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) searchBar.getLayoutParams();
+            if (lp != null) {
+                lp.topMargin = bento ? 0 : getResources().getDimensionPixelSize(R.dimen.top_bar_height);
+                searchBar.setLayoutParams(lp);
             }
         }
     }
@@ -770,6 +881,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
      * consumed here rather than leaving the app.
      */
     private boolean handleBack() {
+        if (bentoEdgeView != null && bentoEdgeView.isDrawerOpen()) {
+            bentoEdgeView.collapseDrawer(true);
+            return true;
+        }
         if (searchBar == null || !searchBar.isOpen()) return false;
         hideSearch();
         return true;
@@ -1257,6 +1372,9 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                     : TabStripView.TabProgress.NONE);
         }
         tabs.update(titles, sessions.indexOf(current), progress);
+        if (bentoEdgeView != null) {
+            bentoEdgeView.update(titles, sessions.indexOf(current), progress);
+        }
     }
 
     // --- TerminalSession.Listener (main thread) ---

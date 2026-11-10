@@ -123,4 +123,10 @@
         android:layout_marginTop="@dimen/top_bar_height"
         android:visibility="gone" />
 
+    <!-- Bento Edge Bar: edge-docked minimized pill + expandable Bento drawer -->
+    <io.github.sylirre.terminal.ui.BentoEdgeView
+        android:id="@+id/bento_edge_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
 </FrameLayout>

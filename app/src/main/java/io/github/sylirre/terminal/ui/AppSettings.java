@@ -48,6 +48,7 @@ public final class AppSettings {
     private static final String KEY_CLIPBOARD_WRITE = "clipboard_write";
     private static final String KEY_CLIPBOARD_READ = "clipboard_read";
     private static final String KEY_SHOW_PROGRESS = "show_progress";
+    private static final String KEY_BENTO_EDGE_BAR = "bento_edge_bar";
     private static final String KEY_BIND_EXTERNAL_STORAGE = "bind_external_storage";
     private static final String KEY_TERMINATE_PROCESSES_ON_EXIT =
             "terminate_processes_on_exit";
@@ -461,6 +462,19 @@ public final class AppSettings {
 
     public void setShowProgress(boolean enabled) {
         prefs.edit().putBoolean(KEY_SHOW_PROGRESS, enabled).apply();
+    }
+
+    /**
+     * When true (default), tabs are minimized to a sleek Bento edge handle
+     * that expands into a full Bento session drawer on tap/swipe, leaving
+     * the terminal viewport completely full screen.
+     */
+    public boolean bentoEdgeBar() {
+        return prefs.getBoolean(KEY_BENTO_EDGE_BAR, true);
+    }
+
+    public void setBentoEdgeBar(boolean enabled) {
+        prefs.edit().putBoolean(KEY_BENTO_EDGE_BAR, enabled).apply();
     }
 
     /**
