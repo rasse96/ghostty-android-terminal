@@ -1367,11 +1367,22 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
     /** A session's tab label: its OSC title, or "label:position" while unnamed. */
     private static String tabTitle(TerminalSession s, int index) {
         String t = s.title();
+        if (t != null) {
+            t = t.trim();
+            // Sanitize raw package names, internal ids, or full files directory paths
+            if (t.contains("io.github.sylirre") || t.contains("sylirre") || t.equalsIgnoreCase("terminal")) {
+                t = null;
+            } else if (t.contains("/data/data/io.github.sylirre.terminal/files")) {
+                t = t.replace("/data/data/io.github.sylirre.terminal/files", "~");
+                if (t.equals("~") || t.isEmpty()) t = null;
+            }
+        }
         if (t != null && !t.isEmpty()) return t;
-        // A guest terminal is already named uniquely by the machine ("hvc1"),
-        // so it needs no tab position to tell it from its siblings the way a
-        // row of identical shells does.
-        return s.isVm() ? s.label() : s.label() + ":" + (index + 1);
+        String label = s.label();
+        if (label == null || label.isEmpty() || label.contains("sylirre") || label.contains("io.github.")) {
+            label = "sh";
+        }
+        return s.isVm() ? label : label + ":" + (index + 1);
     }
 
     private void updateTabs() {

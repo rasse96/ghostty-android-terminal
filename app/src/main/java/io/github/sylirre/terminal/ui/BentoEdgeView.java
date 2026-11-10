@@ -431,6 +431,9 @@ public class BentoEdgeView extends FrameLayout {
         for (int i = 0; i < currentTitles.size(); i++) {
             final int index = i;
             String titleStr = currentTitles.get(i);
+            if (titleStr == null || titleStr.isEmpty() || titleStr.contains("sylirre") || titleStr.contains("io.github.")) {
+                titleStr = "Session " + (i + 1);
+            }
             boolean isActive = (i == currentActiveIndex);
 
             LinearLayout card = new LinearLayout(context);

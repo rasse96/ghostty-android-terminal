@@ -462,10 +462,14 @@ public final class UserlandRootfs {
         String workRel = workDir.equals("/") ? "" : workDir.substring(1);
         String cwd = (workRel.isEmpty() ? root : new File(root, workRel))
                 .getAbsolutePath();
-        // Tab label from the login shell's basename (e.g. /bin/bash -> "bash").
+        // Tab label: distribution name (e.g. alpine, debian)
+        String distLabel = "alpine";
+        if (root.getName().toLowerCase().contains("debian")) {
+            distLabel = "debian";
+        }
         return new SessionCommand(null, argv.toArray(new String[0]),
                 env.toArray(new String[0]),
-                cwd, SessionCommand.labelForShell(shellTokens[0]), true);
+                cwd, distLabel, true);
     }
 
     /**

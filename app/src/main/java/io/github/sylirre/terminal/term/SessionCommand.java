@@ -48,25 +48,40 @@ public final class SessionCommand {
     private static void ensureShellRc(String homeDir) {
         try {
             File rc = new File(homeDir, ".shrc");
-            String content = "# A-SH Shell Config\n" +
+            String content = "# A-SH Shell Config (Termux-style command header)\n" +
                     "export TERM=xterm-256color\n" +
                     "export COLORTERM=truecolor\n" +
                     "export HISTFILE=\"$HOME/.sh_history\"\n" +
                     "export HISTSIZE=10000\n" +
+                    "\n" +
                     "if [ -n \"$KSH_VERSION\" ]; then\n" +
                     "  _ash_prompt() {\n" +
                     "    local d=\"${PWD:-/}\"\n" +
                     "    case \"$d\" in\n" +
                     "      \"$HOME\"*) d=\"~${d#$HOME}\" ;;\n" +
                     "    esac\n" +
-                    "    REPLY=\"$d $ \"\n" +
+                    "    printf '\\033]0;%s\\007' \"$d\"\n" +
+                    "    REPLY=\"\\001\\033[1;36m\\001$d\\001\\033[0m\\001\\n\\001\\033[1;32m\\001❯\\001\\033[0m\\001 \"\n" +
                     "  }\n" +
                     "  PS1='${| _ash_prompt; }'\n" +
                     "elif [ -n \"$BASH_VERSION\" ]; then\n" +
-                    "  PS1='\\w $ '\n" +
+                    "  _bash_prompt() {\n" +
+                    "    local d=\"${PWD/#$HOME/~}\"\n" +
+                    "    printf '\\033]0;%s\\007' \"$d\"\n" +
+                    "  }\n" +
+                    "  PROMPT_COMMAND=_bash_prompt\n" +
+                    "  PS1='\\[\\033[1;36m\\]\\w\\[\\033[0m\\]\\n\\[\\033[1;32m\\]❯\\[\\033[0m\\] '\n" +
                     "else\n" +
-                    "  PS1='$ '\n" +
+                    "  _posix_prompt() {\n" +
+                    "    local d=\"${PWD:-/}\"\n" +
+                    "    case \"$d\" in\n" +
+                    "      \"$HOME\"*) d=\"~${d#$HOME}\" ;;\n" +
+                    "    esac\n" +
+                    "    printf '\\033]0;%s\\007%s\\n❯ ' \"$d\" \"$d\"\n" +
+                    "  }\n" +
+                    "  PS1='$(_posix_prompt) '\n" +
                     "fi\n" +
+                    "\n" +
                     "alias ll='ls -l'\n" +
                     "alias la='ls -la'\n" +
                     "alias ..='cd ..'\n" +
@@ -76,6 +91,8 @@ public final class SessionCommand {
             Files.write(profile.toPath(), content.getBytes(StandardCharsets.UTF_8));
             File mkshrc = new File(homeDir, ".mkshrc");
             Files.write(mkshrc.toPath(), content.getBytes(StandardCharsets.UTF_8));
+            File bashrc = new File(homeDir, ".bashrc");
+            Files.write(bashrc.toPath(), content.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {}
     }
 
@@ -86,7 +103,7 @@ public final class SessionCommand {
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
                 "ENV=" + homeDir + "/.shrc",
-                "PS1=~ $ ",
+                "PS1=~\\n❯ ",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
@@ -94,7 +111,7 @@ public final class SessionCommand {
                 "ANDROID_DATA=/data",
         };
         return new SessionCommand("/system/bin/sh", new String[] {"sh"}, env,
-                homeDir, labelForShell("/system/bin/sh"), false);
+                homeDir, "sh", false);
     }
 
     /**
