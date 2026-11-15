@@ -155,11 +155,18 @@ public final class TerminalNative {
 
     /**
      * Whether this build's libterm.so carries the chroot-ng engine. True only
-     * on arm64-v8a — chroot-ng runs guest code directly on the CPU, so x86_64
-     * builds compile it out (HAVE_CHROOT_NG in CMakeLists). Gates the engine
-     * setting in the UI and the argv[0] choice in {@link UserlandRootfs}.
+     * on arm64-v8a builds with HAVE_CHROOT_NG. Gates the engine setting in the UI
+     * and the argv[0] choice in {@link UserlandRootfs}.
      */
-    public static native boolean hasChrootNg();
+    public static boolean hasChrootNg() {
+        try {
+            return nativeHasChrootNg();
+        } catch (UnsatisfiedLinkError e) {
+            return false;
+        }
+    }
+
+    private static native boolean nativeHasChrootNg();
 
     // --- Full-system emulator (arm64emu) ---
 
@@ -184,7 +191,16 @@ public final class TerminalNative {
      *
      * @return 0 on success; throws {@link java.io.IOException} otherwise.
      */
-    public static native int vmStart(String[] argv, String[] env, String cwd,
+    public static int vmStart(String[] argv, String[] env, String cwd,
+            int nHvc, int[] fdsOut, int[] pidOut) throws java.io.IOException {
+        try {
+            return nativeVmStart(argv, env, cwd, nHvc, fdsOut, pidOut);
+        } catch (UnsatisfiedLinkError e) {
+            throw new java.io.IOException("VM engine (arm64emu) is not linked in this build: " + e.getMessage());
+        }
+    }
+
+    private static native int nativeVmStart(String[] argv, String[] env, String cwd,
             int nHvc, int[] fdsOut, int[] pidOut) throws java.io.IOException;
 
     // --- Ghostty terminal ---

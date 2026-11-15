@@ -117,6 +117,11 @@ public final class SettingsActivity extends Activity {
                 getString(R.string.setting_bento_edge_bar_summary),
                 settings::bentoEdgeBar,
                 settings::setBentoEdgeBar));
+        appearance.add(new Setting.Toggle(
+                getString(R.string.setting_bento_handle_pill_title),
+                getString(R.string.setting_bento_handle_pill_summary),
+                settings::bentoHandlePill,
+                settings::setBentoHandlePill));
         appearance.add(new Setting.Choice(
                 getString(R.string.setting_terminal_bell_title),
                 getString(R.string.setting_terminal_bell_summary),
@@ -321,7 +326,11 @@ public final class SettingsActivity extends Activity {
         // (arm64-v8a builds); elsewhere the row is hidden and arm64chroot is
         // simply what runs. The JIT rows belong to arm64chroot, so they gray
         // out while chroot-ng is selected.
-        boolean hasChrootNg = TerminalNative.hasChrootNg();
+        boolean chrootNgAvailable = false;
+        try {
+            chrootNgAvailable = TerminalNative.hasChrootNg();
+        } catch (Throwable ignored) {}
+        final boolean hasChrootNg = chrootNgAvailable;
         if (hasChrootNg) {
             userland.add(new Setting.Toggle(
                     getString(R.string.setting_userland_chroot_ng_title),
@@ -532,57 +541,68 @@ public final class SettingsActivity extends Activity {
         label.setSingleLine(true);
         // Parked here until the first layout gives us a width to place by;
         // both slots stay gone, so the first frame never squeezes the title.
-        ((FrameLayout) row.findViewById(R.id.setting_value_inline)).addView(label);
+        FrameLayout inlineSlot = row.findViewById(R.id.setting_value_inline);
+        if (inlineSlot != null) {
+            inlineSlot.addView(label);
+        }
         row.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-            if (r - l != or - ol) placeValueLabel(row, label);
+            if (r - l != or - ol) {
+                row.post(() -> placeValueLabel(row, label));
+            }
         });
         label.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override
             public void afterTextChanged(Editable s) {
-                placeValueLabel(row, label);
+                row.post(() -> placeValueLabel(row, label));
             }
         });
     }
 
     private void placeValueLabel(View row, TextView label) {
-        FrameLayout inlineSlot = row.findViewById(R.id.setting_value_inline);
-        FrameLayout belowSlot = row.findViewById(R.id.setting_value_below);
-        int rowWidth = row.getWidth() - row.getPaddingStart() - row.getPaddingEnd();
-        CharSequence value = label.getText();
-        if (rowWidth <= 0 || value.length() == 0) {
-            inlineSlot.setVisibility(View.GONE);
-            belowSlot.setVisibility(View.GONE);
-            return;
-        }
-        TextView title = row.findViewById(R.id.setting_title);
-        View chevron = row.findViewById(R.id.setting_chevron);
-        int gap = Chrome.dp(this, R.dimen.space_4);
-        float titleWidth = title.getPaint().measureText(title.getText().toString());
-        float valueWidth = label.getPaint().measureText(value.toString());
-        int trailing = chevron.getVisibility() == View.VISIBLE
-                ? chevron.getWidth() + Chrome.dp(this, R.dimen.space_2) : 0;
-        boolean inline = titleWidth + gap + valueWidth + trailing <= rowWidth
-                && valueWidth <= rowWidth * 0.45f;
+        if (!isFinishing() && !isDestroyed()) {
+            try {
+                FrameLayout inlineSlot = row.findViewById(R.id.setting_value_inline);
+                FrameLayout belowSlot = row.findViewById(R.id.setting_value_below);
+                if (inlineSlot == null || belowSlot == null) return;
+                int rowWidth = row.getWidth() - row.getPaddingStart() - row.getPaddingEnd();
+                CharSequence value = label.getText();
+                if (rowWidth <= 0 || value == null || value.length() == 0) {
+                    inlineSlot.setVisibility(View.GONE);
+                    belowSlot.setVisibility(View.GONE);
+                    return;
+                }
+                TextView title = row.findViewById(R.id.setting_title);
+                View chevron = row.findViewById(R.id.setting_chevron);
+                int gap = Chrome.dp(this, R.dimen.space_4);
+                float titleWidth = (title != null && title.getText() != null)
+                        ? title.getPaint().measureText(title.getText().toString()) : 0f;
+                float valueWidth = label.getPaint().measureText(value.toString());
+                int trailing = (chevron != null && chevron.getVisibility() == View.VISIBLE)
+                        ? chevron.getWidth() + Chrome.dp(this, R.dimen.space_2) : 0;
+                boolean inline = titleWidth + gap + valueWidth + trailing <= rowWidth
+                        && valueWidth <= rowWidth * 0.45f;
 
-        FrameLayout target = inline ? inlineSlot : belowSlot;
-        if (label.getParent() != target) {
-            ((ViewGroup) label.getParent()).removeView(label);
-            target.addView(label);
+                FrameLayout target = inline ? inlineSlot : belowSlot;
+                if (label.getParent() != target) {
+                    if (label.getParent() instanceof ViewGroup) {
+                        ((ViewGroup) label.getParent()).removeView(label);
+                    }
+                    target.addView(label);
+                }
+                label.setLayoutParams(new FrameLayout.LayoutParams(
+                        inline ? FrameLayout.LayoutParams.WRAP_CONTENT
+                               : FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT));
+                label.setEllipsize(inline
+                        ? TextUtils.TruncateAt.END : TextUtils.TruncateAt.MIDDLE);
+                label.setMaxWidth(inline ? Math.round(rowWidth * 0.45f) : Integer.MAX_VALUE);
+                label.setGravity(inline ? Gravity.END : Gravity.START);
+                inlineSlot.setVisibility(inline ? View.VISIBLE : View.GONE);
+                belowSlot.setVisibility(inline ? View.GONE : View.VISIBLE);
+            } catch (Exception ignored) {}
         }
-        label.setLayoutParams(new FrameLayout.LayoutParams(
-                inline ? FrameLayout.LayoutParams.WRAP_CONTENT
-                       : FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT));
-        // The hard cap keeps a mid-frame text change from squeezing the title
-        // before the next placement pass runs.
-        label.setEllipsize(inline
-                ? TextUtils.TruncateAt.END : TextUtils.TruncateAt.MIDDLE);
-        label.setMaxWidth(inline ? Math.round(rowWidth * 0.45f) : Integer.MAX_VALUE);
-        label.setGravity(inline ? Gravity.END : Gravity.START);
-        inlineSlot.setVisibility(inline ? View.VISIBLE : View.GONE);
-        belowSlot.setVisibility(inline ? View.GONE : View.VISIBLE);
     }
 
     /** A rendered row paired with its setting, so enabled state can be re-applied. */

@@ -170,7 +170,7 @@ public class TerminalView extends View {
      * teardown) so the empty state matches the theme background instead of
      * flashing hard black under a non-black theme.
      */
-    private int emptyBackground = 0xFF000000;
+    private int emptyBackground = 0xFF14161B;
 
     // --- Grid-size HUD. A transient COLSxROWS chip drawn in onDraw while
     // pinch-zooming and held briefly after. Drawn in-view (rather than as a
@@ -279,11 +279,20 @@ public class TerminalView extends View {
         void onScrollStateChanged(boolean atBottom);
     }
 
+    public interface TabSwipeListener {
+        void onSwipeTab(int direction); // -1 = prev, +1 = next
+    }
+
     private ScrollStateListener scrollStateListener;
+    private TabSwipeListener tabSwipeListener;
     private boolean lastAtBottom = true;
 
     public void setScrollStateListener(ScrollStateListener l) {
         scrollStateListener = l;
+    }
+
+    public void setTabSwipeListener(TabSwipeListener l) {
+        tabSwipeListener = l;
     }
 
     /** True when the viewport is at the live bottom (not scrolled into history). */
@@ -370,16 +379,33 @@ public class TerminalView extends View {
 
         scaleGestures = new ScaleGestureDetector(context,
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            private float cumulativeScale = 1.0f;
+
+            @Override
+            public boolean onScaleBegin(ScaleGestureDetector detector) {
+                cumulativeScale = 1.0f;
+                return true;
+            }
+
             @Override
             public boolean onScale(ScaleGestureDetector d) {
-                applyFontSize(fontSizeSp * d.getScaleFactor(), false);
-                return true; // consume so the factor stays incremental
+                cumulativeScale *= d.getScaleFactor();
+                // Discrete threshold prevents erratic micro-jitter while typing or scrolling
+                if (cumulativeScale > 1.15f) {
+                    applyFontSize(Math.round(fontSizeSp + 1f), false);
+                    cumulativeScale = 1.0f;
+                } else if (cumulativeScale < 0.85f) {
+                    applyFontSize(Math.round(fontSizeSp - 1f), false);
+                    cumulativeScale = 1.0f;
+                }
+                return true;
             }
 
             @Override
             public void onScaleEnd(ScaleGestureDetector d) {
-                applyFontSize(fontSizeSp, true);
-                persistFontSize(); // once per gesture, not per frame
+                applyFontSize(Math.round(fontSizeSp), true);
+                persistFontSize();
+                cumulativeScale = 1.0f;
             }
         });
 
@@ -464,6 +490,11 @@ public class TerminalView extends View {
 
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+                // Horizontal fast fling switches tabs directly
+                if (tabSwipeListener != null && Math.abs(vx) > Math.abs(vy) * 2f && Math.abs(vx) > 1500f) {
+                    tabSwipeListener.onSwipeTab(vx < 0 ? 1 : -1);
+                    return true;
+                }
                 if (session == null || snapshot.altScreen()) return false;
                 // Mouse reporting already emitted discrete wheel reports during
                 // the drag; don't coast the local viewport on top of that.
@@ -788,6 +819,8 @@ public class TerminalView extends View {
     private void setTextSizePx(float px) {
         textPaint.setTypeface(regularTypeface);
         textPaint.setTextSize(px);
+        textPaint.setSubpixelText(true);
+        textPaint.setAntiAlias(true);
         Paint.FontMetricsInt fm = textPaint.getFontMetricsInt();
         cellWidth = textPaint.measureText("M");
         cellHeight = fm.descent - fm.ascent;
@@ -852,7 +885,7 @@ public class TerminalView extends View {
     }
 
     private void applyFontSize(float sp, boolean immediate) {
-        sp = Math.max(MIN_FONT_SP, Math.min(MAX_FONT_SP, sp));
+        sp = Math.round(Math.max(MIN_FONT_SP, Math.min(MAX_FONT_SP, sp)));
         if (sp == fontSizeSp) return;
         fontSizeSp = sp;
         setTextSizePx(spToPx(sp));
@@ -1932,13 +1965,23 @@ public class TerminalView extends View {
                 continue;
             }
             if (cluster != null || cp > 0x7F) {
+                // If this is a box-drawing or block-element codepoint (e.g. ──────, │, ┌──┐, █),
+                // render it with exact vector geometry spanning the cell boundaries so there are
+                // zero 1px seams or font-metric gaps between adjacent rows and columns.
+                applyStyle(fg, attr);
+                if (cluster == null && cp >= 0x2500 && cp <= 0x259F
+                        && drawBoxOrBlock(canvas, cp, textMarginLeft + x * cellWidth, top, cellWidth, cellHeight, textPaint)) {
+                    drawUnderline(canvas, fg, attr,
+                            textMarginLeft + x * cellWidth,
+                            textMarginLeft + (x + 1) * cellWidth, top);
+                    continue;
+                }
                 // Narrow cluster or lone non-ASCII glyph: one cell wide, drawn
                 // individually and pinned to its grid column. A cluster's
                 // combining marks attach to the base instead of the next cell,
                 // and a glyph whose font advance differs from cellWidth (e.g. a
                 // block/box element resolved via font fallback) can't push later
                 // cells right the way it would inside a batched drawText.
-                applyStyle(fg, attr);
                 String s = cluster != null ? cluster : new String(Character.toChars(cp));
                 canvas.drawText(s, textMarginLeft + x * cellWidth,
                         top + baseline, textPaint);
@@ -1960,41 +2003,172 @@ public class TerminalView extends View {
         boolean italic = (attr & TerminalNative.ATTR_ITALIC) != 0;
         boolean bold = (attr & TerminalNative.ATTR_BOLD) != 0;
         Typeface face = regularTypeface;
-        boolean fakeBold = false;
-        boolean fakeItalic = false;
         if (bold && italic) {
             if (boldItalicTypeface != null) {
                 face = boldItalicTypeface;
             } else if (italicTypeface != null) {
-                face = italicTypeface;
-                fakeBold = true;
+                face = Typeface.create(italicTypeface, 600, true);
             } else if (boldTypeface != null) {
-                face = boldTypeface;
-                fakeItalic = true;
+                face = Typeface.create(boldTypeface, 600, true);
             } else {
-                fakeBold = true;
-                fakeItalic = true;
+                face = Typeface.create(regularTypeface, 600, true);
             }
         } else if (bold) {
             if (boldTypeface != null) {
                 face = boldTypeface;
             } else {
-                fakeBold = true;
+                face = Typeface.create(regularTypeface, 600, false);
             }
         } else if (italic) {
             if (italicTypeface != null) {
                 face = italicTypeface;
             } else {
-                fakeItalic = true;
+                face = Typeface.create(regularTypeface, 400, true);
             }
         }
         textPaint.setColor(fg);
         textPaint.setTypeface(face);
-        textPaint.setFakeBoldText(fakeBold);
-        textPaint.setTextSkewX(fakeItalic ? -0.25f : 0);
+        // Clean modern typography: avoid artificial stroke fattening that causes text smudging.
+        textPaint.setFakeBoldText(false);
+        textPaint.setTextSkewX(0);
         // Underlines are stroked separately by drawUnderline so the engine's
         // 4:2..4:5 styles render; Paint's underline only does a solid line.
         textPaint.setStrikeThruText((attr & TerminalNative.ATTR_STRIKE) != 0);
+    }
+
+    /**
+     * Renders Unicode Box Drawing (U+2500..U+257F) and Block Elements (U+2580..U+259F)
+     * using exact vector geometry directly on the Canvas.
+     *
+     * This guarantees 100% seamless continuity with zero cell-boundary gaps across
+     * consecutive columns and rows (e.g. ──────, │, ┌──┐, full/half blocks), matching
+     * Termux, Acode, and Haven terminal display standards.
+     *
+     * Returns true if the codepoint was custom-rendered, false to fall back to font drawText.
+     */
+    private boolean drawBoxOrBlock(Canvas canvas, int cp, float left, float top, float width, float height, Paint paint) {
+        if (cp < 0x2500 || cp > 0x259F) return false;
+
+        float right = left + width;
+        float bottom = top + height;
+        float midX = left + width * 0.5f;
+        float midY = top + height * 0.5f;
+        float stroke = Math.max(1.5f, Math.round(height / 16f));
+        float hStroke = stroke * 2f;
+        float half = stroke * 0.5f;
+        float halfH = hStroke * 0.5f;
+
+        switch (cp) {
+            // --- Horizontal lines ---
+            case 0x2500: // ─ Light horizontal
+            case 0x2504: // ┄ Triple dash (continuous vector rule)
+            case 0x2508: // ┈ Quad dash
+                canvas.drawRect(left, midY - half, right, midY + half, paint);
+                return true;
+            case 0x2501: // ━ Heavy horizontal
+                canvas.drawRect(left, midY - halfH, right, midY + halfH, paint);
+                return true;
+
+            // --- Vertical lines ---
+            case 0x2502: // │ Light vertical
+            case 0x2506: // ┆ Triple dash vertical
+            case 0x250A: // ┊ Quad dash vertical
+                canvas.drawRect(midX - half, top, midX + half, bottom, paint);
+                return true;
+            case 0x2503: // ┃ Heavy vertical
+                canvas.drawRect(midX - halfH, top, midX + halfH, bottom, paint);
+                return true;
+
+            // --- Corners ---
+            case 0x250C: // ┌ Light down and right
+                canvas.drawRect(midX - half, midY - half, right, midY + half, paint);
+                canvas.drawRect(midX - half, midY - half, midX + half, bottom, paint);
+                return true;
+            case 0x2510: // ┐ Light down and left
+                canvas.drawRect(left, midY - half, midX + half, midY + half, paint);
+                canvas.drawRect(midX - half, midY - half, midX + half, bottom, paint);
+                return true;
+            case 0x2514: // └ Light up and right
+                canvas.drawRect(midX - half, top, midX + half, midY + half, paint);
+                canvas.drawRect(midX - half, midY - half, right, midY + half, paint);
+                return true;
+            case 0x2518: // ┘ Light up and left
+                canvas.drawRect(midX - half, top, midX + half, midY + half, paint);
+                canvas.drawRect(left, midY - half, midX + half, midY + half, paint);
+                return true;
+
+            // --- Tees ---
+            case 0x251C: // ├ Light vertical and right
+                canvas.drawRect(midX - half, top, midX + half, bottom, paint);
+                canvas.drawRect(midX - half, midY - half, right, midY + half, paint);
+                return true;
+            case 0x2524: // ┤ Light vertical and left
+                canvas.drawRect(midX - half, top, midX + half, bottom, paint);
+                canvas.drawRect(left, midY - half, midX + half, midY + half, paint);
+                return true;
+            case 0x252C: // ┬ Light down and horizontal
+                canvas.drawRect(left, midY - half, right, midY + half, paint);
+                canvas.drawRect(midX - half, midY - half, midX + half, bottom, paint);
+                return true;
+            case 0x2534: // ┴ Light up and horizontal
+                canvas.drawRect(left, midY - half, right, midY + half, paint);
+                canvas.drawRect(midX - half, top, midX + half, midY + half, paint);
+                return true;
+            case 0x253C: // ┼ Light vertical and horizontal
+                canvas.drawRect(left, midY - half, right, midY + half, paint);
+                canvas.drawRect(midX - half, top, midX + half, bottom, paint);
+                return true;
+
+            // --- Double lines ---
+            case 0x2550: // ═ Double horizontal
+                float gap = stroke * 1.5f;
+                canvas.drawRect(left, midY - gap - half, right, midY - gap + half, paint);
+                canvas.drawRect(left, midY + gap - half, right, midY + gap + half, paint);
+                return true;
+            case 0x2551: // ║ Double vertical
+                float vGap = stroke * 1.5f;
+                canvas.drawRect(midX - vGap - half, top, midX - vGap + half, bottom, paint);
+                canvas.drawRect(midX + vGap - half, top, midX + vGap + half, bottom, paint);
+                return true;
+
+            // --- Block elements ---
+            case 0x2588: // █ Full block
+                canvas.drawRect(left, top, right, bottom, paint);
+                return true;
+            case 0x2580: // ▀ Upper half block
+                canvas.drawRect(left, top, right, midY, paint);
+                return true;
+            case 0x2584: // ▄ Lower half block
+                canvas.drawRect(left, midY, right, bottom, paint);
+                return true;
+            case 0x258C: // ▌ Left half block
+                canvas.drawRect(left, top, midX, bottom, paint);
+                return true;
+            case 0x2590: // ▐ Right half block
+                canvas.drawRect(midX, top, right, bottom, paint);
+                return true;
+            case 0x2591: // ░ Light shade
+                int origAlpha = paint.getAlpha();
+                paint.setAlpha((int) (origAlpha * 0.25f));
+                canvas.drawRect(left, top, right, bottom, paint);
+                paint.setAlpha(origAlpha);
+                return true;
+            case 0x2592: // ▒ Medium shade
+                int origAlpha2 = paint.getAlpha();
+                paint.setAlpha((int) (origAlpha2 * 0.50f));
+                canvas.drawRect(left, top, right, bottom, paint);
+                paint.setAlpha(origAlpha2);
+                return true;
+            case 0x2593: // ▓ Dark shade
+                int origAlpha3 = paint.getAlpha();
+                paint.setAlpha((int) (origAlpha3 * 0.75f));
+                canvas.drawRect(left, top, right, bottom, paint);
+                paint.setAlpha(origAlpha3);
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /**

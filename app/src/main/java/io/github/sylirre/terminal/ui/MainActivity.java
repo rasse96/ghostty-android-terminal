@@ -148,6 +148,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         chrome = ChromePalette.from(this, 0xFF000000);
 
         settings = new AppSettings(this);
+        SessionCommand.ensureRish(this, getFilesDir().getAbsolutePath());
         // Existing installs never see the intro: a rootfs on disk means the
         // user was set up before onboarding existed.
         if (!settings.onboardingCompleted() && UserlandRootfs.isInstalled(this)) {
@@ -206,6 +207,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         // where jumping between prompts is useful — so the tab strip keeps the
         // full top-bar width during normal typing at the live bottom.
         terminal.setScrollStateListener(atBottom -> updatePromptNav(atBottom));
+        terminal.setTabSwipeListener(this::switchTabDelta);
         applyPromptNav();
 
         View root = findViewById(R.id.root);
@@ -296,7 +298,10 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                     } else if (VmImages.isInstalled(MainActivity.this) || VmImages.assetsAvailable(MainActivity.this)) {
                         startVm();
                     } else {
-                        Toast.makeText(MainActivity.this, R.string.toast_vm_no_images, Toast.LENGTH_LONG).show();
+                        Dialogs.alert(MainActivity.this, getString(R.string.env_vm_name),
+                                getString(R.string.toast_vm_no_images) + "\n\n" +
+                                "Requires vm_firmware.fd and a bootable aarch64 Linux ISO (vm_*.iso) in:\n" +
+                                VmImages.dir(MainActivity.this).getAbsolutePath());
                     }
                 } else {
                     createSessionWithProfile(SessionProfile.of(type));
@@ -323,6 +328,11 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
                 boolean bento = settings.bentoEdgeBar();
                 settings.setBentoEdgeBar(!bento);
                 applyUiMode();
+            }
+
+            @Override
+            public void onHandlePillRemoved() {
+                settings.setBentoHandlePill(false);
             }
         });
 
@@ -630,7 +640,8 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         boolean bento = settings.bentoEdgeBar();
         mainTopBar.setVisibility(bento ? View.GONE : View.VISIBLE);
         if (bentoEdgeView != null) {
-            bentoEdgeView.setVisibility(bento ? View.VISIBLE : View.GONE);
+            bentoEdgeView.setVisibility(View.VISIBLE);
+            bentoEdgeView.setHandlePillVisible(settings.bentoHandlePill() && bento);
         }
         if (searchBar != null) {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) searchBar.getLayoutParams();
@@ -668,6 +679,12 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
             labels.add(getString(R.string.session_type_install_linux));
             actions.add(this::startOnboardingSetup);
         }
+
+        labels.add("Shizuku (rish)");
+        actions.add(() -> createSessionWithProfile(SessionProfile.of(SessionProfile.Type.SHIZUKU_RISH)));
+
+        labels.add("Termux");
+        actions.add(() -> createSessionWithProfile(SessionProfile.of(SessionProfile.Type.TERMUX_BRIDGE)));
 
         labels.add(getString(R.string.session_type_shell));
         actions.add(() -> createSession(false));
@@ -836,6 +853,16 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         current = s;
         terminal.attachSession(s);
         updateTabs();
+    }
+
+    public void switchTabDelta(int delta) {
+        List<TerminalSession> list = sessions.sessions();
+        if (list.size() <= 1) return;
+        int idx = list.indexOf(current);
+        if (idx < 0) return;
+        int newIdx = (idx + delta) % list.size();
+        if (newIdx < 0) newIdx += list.size();
+        switchTo(list.get(newIdx));
     }
 
     private void showKeyboard() {
@@ -1364,7 +1391,7 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         }
     }
 
-    /** A session's tab label: its OSC title, or "label:position" while unnamed. */
+    /** A session's tab label: its OSC title, or friendly name while unnamed. */
     private static String tabTitle(TerminalSession s, int index) {
         String t = s.title();
         if (t != null) {
@@ -1380,9 +1407,23 @@ public class MainActivity extends Activity implements TerminalSession.Listener {
         if (t != null && !t.isEmpty()) return t;
         String label = s.label();
         if (label == null || label.isEmpty() || label.contains("sylirre") || label.contains("io.github.")) {
-            label = "sh";
+            label = "Android";
+        } else if (label.equalsIgnoreCase("sh")) {
+            label = "Android";
+        } else if (label.equalsIgnoreCase("rish")) {
+            label = "Shizuku";
+        } else if (label.equalsIgnoreCase("termux")) {
+            label = "Termux";
+        } else if (label.equalsIgnoreCase("root")) {
+            label = "Root";
+        } else if (label.equalsIgnoreCase("alpine")) {
+            label = "Alpine";
+        } else if (label.equalsIgnoreCase("ssh")) {
+            label = "SSH";
+        } else {
+            label = Character.toUpperCase(label.charAt(0)) + label.substring(1);
         }
-        return s.isVm() ? label : label + ":" + (index + 1);
+        return s.isVm() ? label : label + " " + (index + 1);
     }
 
     private void updateTabs() {

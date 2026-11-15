@@ -14,6 +14,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -26,6 +27,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,6 +54,7 @@ public class BentoEdgeView extends FrameLayout {
         void onThemesClicked();
         void onSettingsClicked();
         void onToggleTopBarClicked();
+        default void onHandlePillRemoved() {}
     }
 
     private Listener listener;
@@ -65,11 +68,16 @@ public class BentoEdgeView extends FrameLayout {
     private View handleProgressDot;
 
     private boolean isDrawerOpen = false;
+    private boolean handlePillVisible = true;
     private int drawerWidth = 0;
     private float handleY = -1;
     private float touchStartY = 0;
     private float touchStartX = 0;
     private boolean isDraggingHandle = false;
+
+    private float edgeStartX = 0;
+    private float edgeStartY = 0;
+    private boolean isEdgeSwiping = false;
 
     private List<String> currentTitles = new ArrayList<>();
     private int currentActiveIndex = 0;
@@ -168,8 +176,26 @@ public class BentoEdgeView extends FrameLayout {
 
         handlePill.addView(pillContent);
 
-        // Handle touch & drag handling
+        // Handle touch, drag, tap & long-press removal
+        GestureDetector pillGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                handlePill.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                expandDrawer(true);
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                handlePill.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                setHandlePillVisible(false);
+                if (listener != null) listener.onHandlePillRemoved();
+                Toast.makeText(getContext(), R.string.bento_pill_hidden_hint, Toast.LENGTH_LONG).show();
+            }
+        });
+
         handlePill.setOnTouchListener((v, event) -> {
+            pillGestureDetector.onTouchEvent(event);
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     touchStartY = event.getRawY();
@@ -196,13 +222,6 @@ public class BentoEdgeView extends FrameLayout {
                     return true;
 
                 case MotionEvent.ACTION_UP:
-                    if (!isDraggingHandle) {
-                        v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                        expandDrawer(true);
-                    }
-                    isDraggingHandle = false;
-                    return true;
-
                 case MotionEvent.ACTION_CANCEL:
                     isDraggingHandle = false;
                     return true;
@@ -371,28 +390,54 @@ public class BentoEdgeView extends FrameLayout {
         }
     }
 
+    public void setHandlePillVisible(boolean visible) {
+        this.handlePillVisible = visible;
+        if (handlePill != null) {
+            handlePill.setVisibility(!isDrawerOpen && handlePillVisible ? VISIBLE : GONE);
+        }
+    }
+
     public void applyPalette(ChromePalette p) {
         this.palette = p;
         if (p == null) return;
 
-        // Drawer background
-        drawerContainer.setBackground(p.rounded(p.surface1, dp(16), p.border, dp(1)));
+        // Drawer background: modern frosted glass effect
+        // Translucent dark glass surface with specular border and elegant corner rounding
+        int glassBg = Color.argb(220, 18, 22, 32);
+        int glassBorder = Color.argb(65, 255, 255, 255);
+        if (p != null) {
+            int baseColor = p.surface1;
+            glassBg = Color.argb(215, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor));
+            glassBorder = Color.argb(70, Math.min(255, Color.red(p.accent) + 40),
+                    Math.min(255, Color.green(p.accent) + 40),
+                    Math.min(255, Color.blue(p.accent) + 40));
+        }
+        GradientDrawable glassDrawable = new GradientDrawable();
+        glassDrawable.setShape(GradientDrawable.RECTANGLE);
+        glassDrawable.setColor(glassBg);
+        float r = dp(24);
+        glassDrawable.setCornerRadii(new float[]{r, r, 0, 0, 0, 0, r, r});
+        glassDrawable.setStroke(dp(1.2f), glassBorder);
+        drawerContainer.setBackground(glassDrawable);
 
-        // Handle pill background
-        handlePill.setBackground(p.rounded(p.surface2, dp(19), p.accent, dp(1.5f)));
-        handleText.setTextColor(p.accent);
+        // Handle pill background: modern translucent pill
+        int pillBg = p != null ? Color.argb(220, Color.red(p.surface2), Color.green(p.surface2), Color.blue(p.surface2)) : Color.argb(220, 30, 35, 48);
+        handlePill.setBackground(p != null ? p.rounded(pillBg, dp(19), p.accent, dp(1.5f)) : null);
+        if (p != null) {
+            handleText.setTextColor(p.accent);
+        }
 
         // Dot
         GradientDrawable dotDrawable = new GradientDrawable();
         dotDrawable.setShape(GradientDrawable.OVAL);
-        dotDrawable.setColor(p.accent);
+        dotDrawable.setColor(p != null ? p.accent : Color.WHITE);
         handleProgressDot.setBackground(dotDrawable);
 
         // Re-render sessions list to apply theme colors
         renderSessions();
 
-        if (!isDrawerOpen && handlePill != null) {
-            handlePill.setVisibility(VISIBLE);
+        if (handlePill != null) {
+            handlePill.setVisibility(!isDrawerOpen && handlePillVisible ? VISIBLE : GONE);
         }
     }
 
@@ -418,8 +463,8 @@ public class BentoEdgeView extends FrameLayout {
 
         renderSessions();
 
-        if (!isDrawerOpen && handlePill != null) {
-            handlePill.setVisibility(VISIBLE);
+        if (handlePill != null) {
+            handlePill.setVisibility(!isDrawerOpen && handlePillVisible ? VISIBLE : GONE);
         }
     }
 
@@ -535,14 +580,14 @@ public class BentoEdgeView extends FrameLayout {
 
     public void collapseDrawer(boolean animate) {
         if (!isDrawerOpen) {
-            if (handlePill != null) handlePill.setVisibility(VISIBLE);
+            if (handlePill != null) handlePill.setVisibility(handlePillVisible ? VISIBLE : GONE);
             if (drawerContainer != null) drawerContainer.setVisibility(GONE);
             if (scrimView != null) scrimView.setVisibility(GONE);
             return;
         }
         isDrawerOpen = false;
 
-        if (handlePill != null) handlePill.setVisibility(VISIBLE);
+        if (handlePill != null) handlePill.setVisibility(handlePillVisible ? VISIBLE : GONE);
         int targetX = drawerWidth > 0 ? drawerWidth : (drawerContainer != null && drawerContainer.getWidth() > 0 ? drawerContainer.getWidth() : dp(320));
 
         if (scrimView != null) scrimView.animate().setListener(null);
@@ -563,7 +608,7 @@ public class BentoEdgeView extends FrameLayout {
                                 if (!isDrawerOpen) {
                                     if (drawerContainer != null) drawerContainer.setVisibility(GONE);
                                     if (scrimView != null) scrimView.setVisibility(GONE);
-                                    if (handlePill != null) handlePill.setVisibility(VISIBLE);
+                                    if (handlePill != null) handlePill.setVisibility(handlePillVisible ? VISIBLE : GONE);
                                 }
                             }
                         })
@@ -578,16 +623,94 @@ public class BentoEdgeView extends FrameLayout {
                 drawerContainer.setVisibility(GONE);
                 drawerContainer.setTranslationX(targetX);
             }
-            if (handlePill != null) handlePill.setVisibility(VISIBLE);
+            if (handlePill != null) handlePill.setVisibility(handlePillVisible ? VISIBLE : GONE);
         }
     }
 
     @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        if (!isDrawerOpen) {
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        if (isDrawerOpen) {
+            // Touch outside drawerContainer intercepts to dismiss on scrim
+            if (drawerContainer != null && ev.getX() < drawerContainer.getX()) {
+                return true;
+            }
             return false;
         }
-        return super.onTouchEvent(event);
+
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                edgeStartX = ev.getX();
+                edgeStartY = ev.getY();
+                isEdgeSwiping = false;
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                if (edgeStartX >= getWidth() - dp(32)) {
+                    float dx = ev.getX() - edgeStartX;
+                    float dy = Math.abs(ev.getY() - edgeStartY);
+                    if (dx < -dp(18) && Math.abs(dx) > dy * 1.3f) {
+                        isEdgeSwiping = true;
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                        return true;
+                    }
+                }
+                break;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                isEdgeSwiping = false;
+                break;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        if (isEdgeSwiping) {
+            switch (ev.getActionMasked()) {
+                case MotionEvent.ACTION_MOVE:
+                    float dx = ev.getX() - edgeStartX;
+                    if (drawerContainer != null) {
+                        drawerContainer.setVisibility(VISIBLE);
+                        if (handlePill != null) handlePill.setVisibility(GONE);
+                        int w = drawerWidth > 0 ? drawerWidth : dp(320);
+                        float progress = Math.min(1f, Math.max(0f, -dx / (float) w));
+                        drawerContainer.setTranslationX(w * (1f - progress));
+                        if (scrimView != null) {
+                            scrimView.setVisibility(VISIBLE);
+                            scrimView.setAlpha(progress * 0.7f);
+                        }
+                    }
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                    float finalDx = ev.getX() - edgeStartX;
+                    isEdgeSwiping = false;
+                    if (finalDx < -dp(45)) {
+                        expandDrawer(true);
+                    } else {
+                        collapseDrawer(true);
+                    }
+                    return true;
+
+                case MotionEvent.ACTION_CANCEL:
+                    isEdgeSwiping = false;
+                    collapseDrawer(true);
+                    return true;
+            }
+        }
+
+        if (isDrawerOpen) {
+            if (ev.getActionMasked() == MotionEvent.ACTION_UP) {
+                if (drawerContainer != null && ev.getX() < drawerContainer.getX()) {
+                    collapseDrawer(true);
+                    return true;
+                }
+            }
+            return true;
+        }
+
+        return super.onTouchEvent(ev);
     }
 
     public boolean isDrawerOpen() {

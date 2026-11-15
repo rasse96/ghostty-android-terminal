@@ -45,7 +45,7 @@ public final class SessionManager {
             TerminalSession.Listener listener) throws IOException {
         SessionCommand command = userland
                 ? UserlandRootfs.command(context, userlandOptions)
-                : SessionCommand.androidShell(
+                : SessionCommand.androidShell(context,
                         context.getFilesDir().getAbsolutePath(),
                         TmpDir.ensure(context));
         return create(context, cols, rows, cellWidthPx, cellHeightPx, scrollbackLines,

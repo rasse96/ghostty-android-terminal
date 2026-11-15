@@ -520,6 +520,9 @@
     <!-- Bento Edge Bar & Multi-Environment -->
     <string name="setting_bento_edge_bar_title">Bento Edge Bar</string>
     <string name="setting_bento_edge_bar_summary">Dock tabs to a sleek edge handle with expandable Bento drawer for 100% full-screen terminal.</string>
+    <string name="setting_bento_handle_pill_title">Bento Edge Handle Pill</string>
+    <string name="setting_bento_handle_pill_summary">Show the floating edge handle. When hidden, swipe from the right edge anytime to open the Bento drawer.</string>
+    <string name="bento_pill_hidden_hint">Edge pill hidden. Swipe from the right edge anytime to open the Bento drawer.</string>
     <string name="bento_drawer_title">Sessions</string>
     <string name="bento_new_session">+ New Session</string>
     <string name="bento_action_search">Find</string>

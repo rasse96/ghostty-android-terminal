@@ -131,6 +131,15 @@ final class Dialogs {
         });
     }
 
+    /** A simple informative dialog with an OK button. */
+    static void alert(Context context, CharSequence title, CharSequence message) {
+        new AlertDialog.Builder(context)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton(R.string.action_ok, null)
+                .show();
+    }
+
     /** A confirm dialog for a destructive action; the confirm button is danger-tinted. */
     static void confirmDanger(Context context, CharSequence title, CharSequence message,
             int confirmRes, Runnable onConfirm) {

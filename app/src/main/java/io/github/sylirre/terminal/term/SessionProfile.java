@@ -73,6 +73,9 @@ public final class SessionProfile {
                 return SessionCommand.termuxBridge(homeDir, tmpDir);
 
             case ROOT_SU:
+                if (!SessionCommand.isRootAvailable()) {
+                    throw new IOException("Root (su) binary not found on this device.\nUse Shizuku (rish) or Termux instead.");
+                }
                 return SessionCommand.rootShell(homeDir, tmpDir);
 
             case SHIZUKU_RISH:
@@ -83,7 +86,7 @@ public final class SessionProfile {
 
             case ANDROID_SHELL:
             default:
-                return SessionCommand.androidShell(homeDir, tmpDir);
+                return SessionCommand.androidShell(context, homeDir, tmpDir);
         }
     }
 

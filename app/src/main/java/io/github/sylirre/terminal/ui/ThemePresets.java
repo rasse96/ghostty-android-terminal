@@ -20,8 +20,17 @@ final class ThemePresets {
 
     /** All presets, in display order; {@code get(0)} is {@link #DEFAULT}. */
     static final List<TerminalTheme> ALL = Collections.unmodifiableList(Arrays.asList(
-        // Default: classic xterm palette, white on black.
-        t("Default", 0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF,
+        // Default: Modern Termux / Acode / Haven Soft Eye-Care Dark.
+        // Calibrated for low eye strain in long sessions: soft readable slate/cream text,
+        // deep non-reflective dark background, zero blinding neon glare, and balanced pastels.
+        t("Default", 0xFFCDD6F4, 0xFF14161B, 0xFF58A6FF,
+            0xFF1E222A, 0xFFE06C75, 0xFF98C379, 0xFFE5C07B,
+            0xFF61AFEF, 0xFFC678DD, 0xFF56B6C2, 0xFFABB2BF,
+            0xFF5C6370, 0xFFE06C75, 0xFFA8E6CF, 0xFFFFE599,
+            0xFF89B4FA, 0xFFD4C1EC, 0xFFA0E7E5, 0xFFECEFF4),
+
+        // Classic xterm 16-color palette, white on black.
+        t("Classic Xterm", 0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF,
             0xFF000000, 0xFFCD0000, 0xFF00CD00, 0xFFCDCD00,
             0xFF0000EE, 0xFFCD00CD, 0xFF00CDCD, 0xFFE5E5E5,
             0xFF7F7F7F, 0xFFFF0000, 0xFF00FF00, 0xFFFFFF00,

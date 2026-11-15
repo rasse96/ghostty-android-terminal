@@ -48,35 +48,40 @@ public final class SessionCommand {
     private static void ensureShellRc(String homeDir) {
         try {
             File rc = new File(homeDir, ".shrc");
-            String content = "# A-SH Shell Config (Termux-style command header)\n" +
+            String content = "# A-SH Shell Config (Termux / Acode / Haven style)\n" +
                     "export TERM=xterm-256color\n" +
                     "export COLORTERM=truecolor\n" +
+                    "export LANG=en_US.UTF-8\n" +
+                    "export LC_ALL=en_US.UTF-8\n" +
                     "export HISTFILE=\"$HOME/.sh_history\"\n" +
                     "export HISTSIZE=10000\n" +
+                    "\n" +
+                    "# Header banner with clean seamless box-divider\n" +
+                    "if [ -t 1 ]; then\n" +
+                    "  printf '\\033[38;2;97;175;239m●\\033[0m \\033[1mA-SH Terminal\\033[0m \\033[38;2;92;99;112m│\\033[0m UTF-8 TrueColor Ready\\n'\n" +
+                    "  printf '\\033[38;2;92;99;112m──────────────────────────────────────────────\\033[0m\\n'\n" +
+                    "fi\n" +
                     "\n" +
                     "if [ -n \"$KSH_VERSION\" ]; then\n" +
                     "  _ash_prompt() {\n" +
                     "    local p=\"$PWD\"\n" +
+                    "    [ \"$p\" = \"$HOME\" ] && p=\"~\"\n" +
                     "    case \"$p\" in\n" +
                     "      *io.github.sylirre.terminal/files*)\n" +
                     "        p=\"~${p#*io.github.sylirre.terminal/files}\"\n" +
                     "        ;;\n" +
-                    "      *)\n" +
-                    "        if [ -n \"$HOME\" ] && [ \"$HOME\" != \"/\" ]; then\n" +
-                    "          case \"$p\" in\n" +
-                    "            \"$HOME\"*) p=\"~${p#$HOME}\" ;;\n" +
-                    "          esac\n" +
-                    "        fi\n" +
+                    "      \"$HOME\"*)\n" +
+                    "        p=\"~${p#$HOME}\"\n" +
                     "        ;;\n" +
                     "    esac\n" +
                     "    [ -z \"$p\" ] && p=\"~\"\n" +
                     "    local s=\"$\"\n" +
                     "    [ \"$(id -u 2>/dev/null)\" = \"0\" ] && s=\"#\"\n" +
-                    "    REPLY=\"$p\n$s \"\n" +
+                    "    REPLY=\"$p $s \"\n" +
                     "  }\n" +
                     "  PS1='${| _ash_prompt; }'\n" +
                     "elif [ -n \"$BASH_VERSION\" ]; then\n" +
-                    "  PS1='\\w\\n\\$ '\n" +
+                    "  PS1='\\w \\$ '\n" +
                     "else\n" +
                     "  PS1='$ '\n" +
                     "fi\n" +
@@ -84,7 +89,29 @@ public final class SessionCommand {
                     "alias ll='ls -l'\n" +
                     "alias la='ls -la'\n" +
                     "alias ..='cd ..'\n" +
-                    "alias ...='cd ../..'\n";
+                    "alias ...='cd ../..'\n" +
+                    "alias hr='printf \"\\033[38;2;92;99;112m──────\\033[0m\\n\"'\n" +
+                    "\n" +
+                    "# Code highlighting & formatting helpers\n" +
+                    "highlight() {\n" +
+                    "  if command -v bat >/dev/null 2>&1; then\n" +
+                    "    bat --style=plain --paging=never \"$@\"\n" +
+                    "  elif command -v pygmentize >/dev/null 2>&1; then\n" +
+                    "    pygmentize -g \"$@\"\n" +
+                    "  else\n" +
+                    "    cat \"$@\"\n" +
+                    "  fi\n" +
+                    "}\n" +
+                    "alias prettier='highlight'\n" +
+                    "format-json() {\n" +
+                    "  if command -v jq >/dev/null 2>&1; then\n" +
+                    "    jq . \"$@\"\n" +
+                    "  elif command -v python3 >/dev/null 2>&1; then\n" +
+                    "    python3 -m json.tool \"$@\"\n" +
+                    "  else\n" +
+                    "    cat \"$@\"\n" +
+                    "  fi\n" +
+                    "}\n";
             Files.write(rc.toPath(), content.getBytes(StandardCharsets.UTF_8));
             File profile = new File(homeDir, ".profile");
             Files.write(profile.toPath(), content.getBytes(StandardCharsets.UTF_8));
@@ -95,10 +122,61 @@ public final class SessionCommand {
         } catch (Exception ignored) {}
     }
 
-    public static SessionCommand androidShell(String homeDir, String tmpDir) {
+    public static void ensureRish(Context context, String homeDir) {
+        if (context == null) return;
+        try {
+            File binDir = new File(homeDir, "bin");
+            if (!binDir.exists()) binDir.mkdirs();
+            File rishFile = new File(binDir, "rish");
+            File dexFile = new File(binDir, "rish_shizuku.dex");
+            if (!rishFile.exists() || !dexFile.exists()) {
+                AssetManager am = context.getAssets();
+                try (InputStream in = am.open("rish/rish");
+                     FileOutputStream out = new FileOutputStream(rishFile)) {
+                    byte[] buf = new byte[4096];
+                    int r;
+                    while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                }
+                rishFile.setExecutable(true, false);
+
+                try (InputStream in = am.open("rish/rish_shizuku.dex");
+                     FileOutputStream out = new FileOutputStream(dexFile)) {
+                    byte[] buf = new byte[4096];
+                    int r;
+                    while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                }
+                dexFile.setReadOnly();
+            }
+
+            // Install ADB privilege shims for commands that fail under untrusted app UID
+            String[] privilegedCmds = {
+                    "pm", "am", "cmd", "dumpsys", "logcat", "settings",
+                    "service", "svc", "input", "screencap", "setprop"
+            };
+            for (String cmd : privilegedCmds) {
+                File shim = new File(binDir, cmd);
+                String script = "#!/system/bin/sh\n"
+                        + "DIR=\"$(dirname \"$0\")\"\n"
+                        + "CMD=\"$(basename \"$0\")\"\n"
+                        + "if [ -x \"$DIR/rish\" ]; then\n"
+                        + "    exec \"$DIR/rish\" -c \"$CMD $*\"\n"
+                        + "else\n"
+                        + "    exec /system/bin/\"$CMD\" \"$@\"\n"
+                        + "fi\n";
+                try (FileOutputStream out = new FileOutputStream(shim)) {
+                    out.write(script.getBytes(StandardCharsets.UTF_8));
+                }
+                shim.setExecutable(true, false);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public static SessionCommand androidShell(Context context, String homeDir, String tmpDir) {
         ensureShellRc(homeDir);
+        ensureRish(context, homeDir);
+        String binDir = new File(homeDir, "bin").getAbsolutePath();
         String[] env = {
-                "PATH=/system/bin",
+                "PATH=" + binDir + ":/data/data/com.termux/files/usr/bin:/system/bin:/system/xbin",
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
                 "ENV=" + homeDir + "/.shrc",
@@ -106,6 +184,7 @@ public final class SessionCommand {
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
                 "LANG=en_US.UTF-8",
+                "LC_ALL=en_US.UTF-8",
                 "ANDROID_ROOT=/system",
                 "ANDROID_DATA=/data",
         };
@@ -113,9 +192,27 @@ public final class SessionCommand {
                 homeDir, "sh", false);
     }
 
+    public static SessionCommand androidShell(String homeDir, String tmpDir) {
+        return androidShell(null, homeDir, tmpDir);
+    }
+
     /**
      * Spawns a privileged Root shell via su (/system/bin/su, /system/xbin/su, etc.).
      */
+    public static boolean isRootAvailable() {
+        String[] candidates = {
+                "/system/bin/su",
+                "/system/xbin/su",
+                "/data/adb/ksu/bin/su",
+                "/data/adb/ap/bin/su",
+                "/data/adb/magisk/su"
+        };
+        for (String c : candidates) {
+            if (new File(c).canExecute()) return true;
+        }
+        return false;
+    }
+
     public static SessionCommand rootShell(String homeDir, String tmpDir) {
         ensureShellRc(homeDir);
         String suPath = "/system/bin/su";
@@ -140,7 +237,8 @@ public final class SessionCommand {
                 "PS1=# ",
                 "TERM=xterm-256color",
                 "COLORTERM=truecolor",
-                "LANG=en_US.UTF-8"
+                "LANG=en_US.UTF-8",
+                "LC_ALL=en_US.UTF-8"
         };
         return new SessionCommand(suPath, new String[] {suPath, "-"}, env,
                 homeDir, "root", false);
@@ -151,33 +249,10 @@ public final class SessionCommand {
      */
     public static SessionCommand shizukuShell(Context context, String homeDir, String tmpDir) {
         ensureShellRc(homeDir);
+        ensureRish(context, homeDir);
         File binDir = new File(homeDir, "bin");
-        if (!binDir.exists()) binDir.mkdirs();
         File rishFile = new File(binDir, "rish");
         File dexFile = new File(binDir, "rish_shizuku.dex");
-
-        if (context != null) {
-            try {
-                if (!rishFile.exists() || !dexFile.exists()) {
-                    AssetManager am = context.getAssets();
-                    try (InputStream in = am.open("rish/rish");
-                         FileOutputStream out = new FileOutputStream(rishFile)) {
-                        byte[] buf = new byte[4096];
-                        int r;
-                        while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
-                    }
-                    rishFile.setExecutable(true, false);
-
-                    try (InputStream in = am.open("rish/rish_shizuku.dex");
-                         FileOutputStream out = new FileOutputStream(dexFile)) {
-                        byte[] buf = new byte[4096];
-                        int r;
-                        while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
-                    }
-                    dexFile.setReadOnly();
-                }
-            } catch (Exception ignored) {}
-        }
 
         String pkgId = context != null ? context.getPackageName() : "io.github.sylirre.terminal";
         String[] env = {
@@ -270,18 +345,41 @@ public final class SessionCommand {
     }
 
     /**
-     * SSH connection session.
+     * SSH connection session: connects to host:port via OpenSSH if available (Termux or userland),
+     * or displays guidance on installing openssh.
      */
     public static SessionCommand sshCommand(String host, int port, String user, String homeDir, String tmpDir) {
+        ensureShellRc(homeDir);
         String target = (user != null && !user.isEmpty()) ? (user + "@" + host) : host;
-        String[] argv = new String[] {"ssh", "-p", String.valueOf(port), target};
+        String sshBinary = null;
+        if (new File("/data/data/com.termux/files/usr/bin/ssh").canExecute()) {
+            sshBinary = "/data/data/com.termux/files/usr/bin/ssh";
+        } else if (new File(homeDir, "rootfs/usr/bin/ssh").canExecute()) {
+            sshBinary = new File(homeDir, "rootfs/usr/bin/ssh").getAbsolutePath();
+        }
+
         String[] env = {
-                "PATH=/system/bin:/usr/bin:/bin",
+                "PREFIX=/data/data/com.termux/files/usr",
+                "PATH=/data/data/com.termux/files/usr/bin:/system/bin:/bin",
+                "LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib",
                 "HOME=" + homeDir,
                 "TMPDIR=" + tmpDir,
-                "TERM=xterm-256color"
+                "TERM=xterm-256color",
+                "COLORTERM=truecolor",
+                "LANG=en_US.UTF-8",
+                "LC_ALL=en_US.UTF-8"
         };
-        return new SessionCommand("/system/bin/sh", argv, env, homeDir, "ssh:" + host, false);
+
+        if (sshBinary != null) {
+            String[] argv = new String[] {"/system/bin/sh", "-c", "exec " + sshBinary + " -p " + port + " " + target};
+            return new SessionCommand("/system/bin/sh", argv, env, homeDir, "ssh:" + host, false);
+        } else {
+            String script = "echo '\\033[38;2;224;108;117m● SSH client not found.\\033[0m'; " +
+                    "echo 'Install OpenSSH in Termux (pkg install openssh) or Alpine userland (apk add openssh-client).'; " +
+                    "echo; exec /system/bin/sh";
+            String[] argv = new String[] {"/system/bin/sh", "-c", script};
+            return new SessionCommand("/system/bin/sh", argv, env, homeDir, "ssh", false);
+        }
     }
 
     /**
