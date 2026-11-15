@@ -29,7 +29,14 @@ final class ThemePresets {
             0xFF5C6370, 0xFFE06C75, 0xFFA8E6CF, 0xFFFFE599,
             0xFF89B4FA, 0xFFD4C1EC, 0xFFA0E7E5, 0xFFECEFF4),
 
-        // Classic xterm 16-color palette, white on black.
+        // OLED Cyberdeck with OKLCH pastels & electric cyan cursor.
+        t("OLED Cyberdeck", 0xFFCDD6F4, 0xFF08090E, 0xFF38BDF8,
+            0xFF181A24, 0xFFF38BA8, 0xFFA6E3A1, 0xFFF9E2AF,
+            0xFF89B4FA, 0xFFCBA6F7, 0xFF89DCEB, 0xFFBAC2DE,
+            0xFF585B70, 0xFFFFB3BA, 0xFFA8E6CF, 0xFFFFE599,
+            0xFF74C7EC, 0xFFD4C1EC, 0xFFA0E7E5, 0xFFFFFFFF),
+
+        // Classic xterm 16-color palette on pitch black.
         t("Classic Xterm", 0xFFFFFFFF, 0xFF000000, 0xFFFFFFFF,
             0xFF000000, 0xFFCD0000, 0xFF00CD00, 0xFFCDCD00,
             0xFF0000EE, 0xFFCD00CD, 0xFF00CDCD, 0xFFE5E5E5,

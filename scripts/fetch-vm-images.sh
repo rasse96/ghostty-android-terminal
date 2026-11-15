@@ -21,8 +21,9 @@ set -e
 
 ALPINE_BRANCH=latest-stable
 MIRROR="https://dl-cdn.alpinelinux.org/alpine/${ALPINE_BRANCH}/releases/aarch64"
-# Debian's package, used only when the host has no local copy.
-FIRMWARE_URL="https://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_2024.11-6_all.deb"
+# Debian's package pool, used only when the host has no local copy.
+DEBIAN_EDK2_POOL="https://deb.debian.org/debian/pool/main/e/edk2"
+FIRMWARE_URL="${FIRMWARE_URL:-}"
 
 VM_STORAGE=$(dirname "$(realpath "$0")")/../VmImages
 mkdir -p "$VM_STORAGE"
@@ -50,6 +51,15 @@ else
 		cp "$LOCAL_FW" "${FW_OUT}.tmp"
 	else
 		echo "Fetching firmware from Debian..."
+		if [ -z "$FIRMWARE_URL" ]; then
+			DEB_NAME=$(curl -fsSL "${DEBIAN_EDK2_POOL}/" | grep -o 'qemu-efi-aarch64_[^"'\''<> ]*\.deb' | sort -V | tail -n1)
+			if [ -z "$DEB_NAME" ]; then
+				echo "error: failed to locate qemu-efi-aarch64 package in Debian pool" >&2
+				exit 1
+			fi
+			FIRMWARE_URL="${DEBIAN_EDK2_POOL}/${DEB_NAME}"
+		fi
+		echo "Downloading ${FIRMWARE_URL}..."
 		curl -fL -o "${WORKDIR}/edk2.deb" "$FIRMWARE_URL"
 		# ar/tar are enough to pull one file out of a .deb.
 		(cd "$WORKDIR" && ar x edk2.deb && tar xf data.tar.* \
